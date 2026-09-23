@@ -1,15 +1,4 @@
-"""Явный граф состояний агента: узлы, переходы, условный повтор, трасса выполнения.
-
-Граф объявлен данными, а не зашит в последовательность вызовов: исполнитель идёт по
-рёбрам и записывает каждый переход. Отсюда три свойства, ради которых обычно берут
-фреймворки вроде LangGraph, — но без внешней зависимости:
-
-- цикл: провал валидации возвращает управление на получение погоды (одна попытка),
-- наблюдаемость: трасса с временем, статусом и выходом каждого узла пишется в JSON,
-- воспроизводимость: тот же граф исполняется и LLM-агентом, и режимом --no-llm.
-
-Трасса `forecasts/trace_{issue_date}.json` — источник данных для панели наблюдения.
-"""
+"""Общее состояние, переходы и журнал для LLM и детерминированного запуска дня."""
 from __future__ import annotations
 
 import json
@@ -19,92 +8,149 @@ from typing import Callable
 from src.agent import tools as T
 from src.config import FORECASTS
 
-# Узел: имя -> (человекочитаемое описание, функция над контекстом)
 NODES: dict[str, tuple[str, Callable]] = {
     "fetch_weather": ("Получение архивного прогноза погоды", T.fetch_weather),
     "prepare_features": ("Подготовка признаков", T.prepare_features),
     "run_model": ("Запуск моделей обеих турбин", T.run_model),
     "validate_forecast": ("Физическая валидация прогноза", T.validate_forecast),
+    "recover_baseline": ("Резервный прогноз по кривой мощности", T.recover_baseline),
     "compare_with_previous": ("Сравнение с прошлым запуском", T.compare_with_previous),
 }
-
-# Безусловные рёбра
-EDGES: dict[str, str] = {
+EDGES = {
     "fetch_weather": "prepare_features",
     "prepare_features": "run_model",
     "run_model": "validate_forecast",
+    "recover_baseline": "validate_forecast",
     "compare_with_previous": "write_outputs",
 }
-
 ENTRY = "fetch_weather"
 TERMINAL = "write_outputs"
 
 
-def _route_after_validation(result: dict, retried: bool) -> str:
-    """Условное ребро: неудачная валидация один раз отправляет цикл на перезабор входа."""
-    if result.get("ok"):
-        return "compare_with_previous"
-    return "compare_with_previous" if retried else "fetch_weather"
+class DayGraph:
+    """Один контекст на весь день, включая достройку после сбоя LLM.
+
+    Модель получает next_tool после каждого вызова; недопустимый переход не меняет
+    контекст. Ошибка расчёта завершает день с трассой и исключением для CLI.
+    """
+
+    def __init__(self, issue_date: str, weather, mode: str = "no-llm"):
+        self.ctx = T.DayContext(issue_date, weather)
+        self.mode = mode
+        self.node: str | None = ENTRY
+        self.outputs: dict[str, dict] = {}
+        self.trace: list[dict] = []
+        self.retried = False
+        self.fallback = False
+        self.completed = False
+        self.error: str | None = None
+
+    def result(self) -> dict:
+        return {
+            "issue_date": self.ctx.issue_date, "mode": self.mode,
+            "completed": self.completed, "next_tool": self.node,
+            "validation_ok": bool((self.ctx.validation or {}).get("ok")),
+            "retried": self.retried, "fallback": self.fallback,
+            "error": self.error, "trace": self.trace,
+            **self.outputs.get(TERMINAL, {}),
+        }
+
+    def _record(self, node: str, label: str, status: str, output: dict, ms: float = 0) -> None:
+        self.trace.append({"node": node, "label": label, "status": status,
+                           "ms": ms, "output": output, "attempt": 2 if self.retried else 1,
+                           "next_tool": self.node})
+        try:
+            FORECASTS.mkdir(parents=True, exist_ok=True)
+            path = FORECASTS / f"trace_{self.ctx.issue_date}.json"
+            # Замена файла не даёт панели прочитать недописанный JSON между шагами.
+            temp = path.with_suffix(".json.tmp")
+            temp.write_text(json.dumps(self.result(), ensure_ascii=False, indent=1), encoding="utf-8")
+            temp.replace(path)
+        except Exception as exc:
+            self.error = f"Сбой записи трассы: {exc}"
+            self.completed, self.node = False, None
+            raise RuntimeError(self.error) from exc
+
+    def execute(self, name: str, args: dict) -> dict:
+        if self.error:
+            raise RuntimeError(self.error)
+        if self.completed or name != self.node:
+            out = {"error": f"Недопустимый переход: {name}", "next_tool": self.node}
+            self._record("__rejected__", "Отклонён вызов вне порядка графа", "rejected",
+                         {"requested_tool": name, **out})
+            return out
+        if not isinstance(args, dict) or (name == TERMINAL and
+                (not isinstance(args.get("analysis"), str) or not args["analysis"].strip())):
+            out = {"error": "write_outputs требует непустой analysis; аргументы — объект",
+                   "next_tool": self.node}
+            self._record("__rejected__", "Отклонены аргументы инструмента", "rejected", out)
+            return out
+
+        label = "Запись прогноза и отчёта" if name == TERMINAL else NODES[name][0]
+        started = time.perf_counter()
+        try:
+            if name == TERMINAL:
+                analysis = args["analysis"]
+                if self.retried:
+                    analysis += ("\n\nРезервный режим: после неудачной валидации использована "
+                                 "физическая кривая мощности (baseline), повторная валидация пройдена. "
+                                 "Интервалы ансамбля к резервному прогнозу не применяются.")
+                if self.fallback:
+                    analysis += "\n\nПосле сбоя LLM граф завершён детерминированно с сохранённого шага."
+                result = T.write_outputs(self.ctx, analysis)
+                self.completed, self.node = True, None
+            else:
+                result = NODES[name][1](self.ctx)
+                if name == "validate_forecast":
+                    if result["ok"]:
+                        self.node = "compare_with_previous"
+                    elif not self.retried:
+                        self.node = "recover_baseline"
+                    else:
+                        self.error = "Повторная валидация не пройдена: прогноз не опубликован"
+                        self.node = None
+                else:
+                    if name == "recover_baseline":
+                        self.retried = True
+                    self.node = EDGES[name]
+            self.outputs[name] = result
+        except Exception as exc:
+            self.error = f"Сбой узла {name}: {exc}"
+            self.node = None
+            self._record(name, label, "error", {"error": self.error},
+                         round((time.perf_counter() - started) * 1000, 1))
+            raise RuntimeError(self.error) from exc
+
+        status = "invalid" if name == "validate_forecast" and not result["ok"] else "ok"
+        self._record(name, label, status, result, round((time.perf_counter() - started) * 1000, 1))
+        if self.error:
+            raise RuntimeError(self.error)
+        return {**result, "next_tool": self.node}
+
+    def use_fallback(self, reason: str) -> None:
+        self.fallback = True
+        self._record("__fallback__", "Продолжение без LLM", "fallback",
+                     {"reason": reason, "resume_at": self.node})
+
+    def finish(self, analysis_fn: Callable[[dict, T.DayContext], str]) -> dict:
+        """Продолжить с текущего узла; уже выполненные инструменты не вызываются снова."""
+        if self.error:
+            raise RuntimeError(self.error)
+        while not self.completed:
+            args = {"analysis": analysis_fn(self.outputs, self.ctx)} if self.node == TERMINAL else {}
+            self.execute(self.node, args)
+        return self.result()
 
 
 def run_graph(issue_date: str, weather, analysis_fn: Callable[[dict, T.DayContext], str]) -> dict:
-    """Исполнить граф за один прогнозный день.
-
-    analysis_fn(outputs, ctx) -> текст отчёта; именно сюда подключается LLM либо
-    детерминированный шаблон. Возвращает результат дня с трассой.
-    """
-    ctx = T.DayContext(issue_date, weather)
-    trace: list[dict] = []
-    outputs: dict[str, dict] = {}
-    node, retried, guard = ENTRY, False, 0
-
-    while node != TERMINAL and guard < 16:
-        guard += 1
-        label, fn = NODES[node]
-        started = time.perf_counter()
-        try:
-            result = fn(ctx)
-            status = "ok"
-        except Exception as exc:
-            result = {"error": str(exc)}
-            status = "error"
-        elapsed_ms = round((time.perf_counter() - started) * 1000, 1)
-        outputs[node] = result
-        trace.append({"node": node, "label": label, "status": status,
-                      "ms": elapsed_ms, "output": result, "attempt": 2 if retried else 1})
-
-        if status == "error":
-            break
-        if node == "validate_forecast":
-            nxt = _route_after_validation(result, retried)
-            if nxt == ENTRY:
-                retried = True
-                trace.append({"node": "__retry__", "label": "Валидация не прошла — повтор цикла",
-                              "status": "retry", "ms": 0.0, "output": {}, "attempt": 1})
-            node = nxt
-        else:
-            node = EDGES[node]
-
-    analysis = analysis_fn(outputs, ctx)
-    written = T.write_outputs(ctx, analysis)
-    trace.append({"node": "write_outputs", "label": "Запись прогноза и отчёта",
-                  "status": "ok", "ms": 0.0, "output": written, "attempt": 1})
-
-    FORECASTS.mkdir(exist_ok=True)
-    (FORECASTS / f"trace_{issue_date}.json").write_text(
-        json.dumps({"issue_date": issue_date, "retried": retried, "trace": trace},
-                   ensure_ascii=False, indent=1))
-
-    validation = outputs.get("validate_forecast", {})
-    return {"issue_date": issue_date, "validation_ok": bool(validation.get("ok")),
-            "retried": retried, "trace": trace, **written}
+    return DayGraph(issue_date, weather).finish(analysis_fn)
 
 
 def graph_topology() -> dict:
-    """Описание графа для отрисовки в панели наблюдения."""
+    """Узлы и переходы для панели; неуспешная повторная валидация завершает день."""
     nodes = [{"id": k, "label": v[0]} for k, v in NODES.items()]
     nodes.append({"id": TERMINAL, "label": "Запись прогноза и отчёта"})
     edges = [{"from": a, "to": b, "kind": "always"} for a, b in EDGES.items()]
     edges += [{"from": "validate_forecast", "to": "compare_with_previous", "kind": "успех"},
-              {"from": "validate_forecast", "to": "fetch_weather", "kind": "повтор при сбое"}]
+              {"from": "validate_forecast", "to": "recover_baseline", "kind": "одна попытка восстановления"}]
     return {"nodes": nodes, "edges": edges, "entry": ENTRY, "terminal": TERMINAL}

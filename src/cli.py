@@ -1,7 +1,7 @@
 """Точки входа.
 
   python -m src.cli train                                       # обучение + метрики holdout
-  python -m src.cli run-agent --start 2026-01-31 --end 2026-02-28 [--no-llm]
+  python -m src.cli run-agent --start 2026-01-31 --end 2026-02-27 [--no-llm]
   python -m src.cli check-tz                                    # тест склейки таймзон
 """
 from __future__ import annotations
@@ -12,7 +12,7 @@ from datetime import date, timedelta
 
 import pandas as pd
 
-from src.config import FORECASTS, TEST_END, TRAIN_START, TURBINES
+from src.config import FORECASTS, TEST_END, TEST_START, TRAIN_START, TURBINES
 
 
 def _load_weather() -> pd.DataFrame:
@@ -75,6 +75,14 @@ def cmd_run_agent(args) -> None:
 
 def _build_submission() -> None:
     """Сводный файл: на каждый час — прогноз минимального lead time (свежайший запуск)."""
+    for path in FORECASTS.glob("trace_*.json"):
+        trace = json.loads(path.read_text())
+        # Старые трассы не имеют completed; новый неудачный запуск запрещает переиспользование CSV.
+        issue = date.fromisoformat(trace["issue_date"])
+        first_issue = date.fromisoformat(TEST_START) - timedelta(days=1)
+        last_issue = date.fromisoformat(TEST_END) - timedelta(days=1)
+        if first_issue <= issue <= last_issue and trace.get("completed") is False:
+            raise ValueError(f"Запуск {trace['issue_date']} не завершён; повторите его перед сборкой submission")
     frames = []
     for t in TURBINES:
         for f in sorted(FORECASTS.glob(f"forecast_t{t}_*.csv")):

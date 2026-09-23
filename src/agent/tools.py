@@ -52,10 +52,15 @@ def prepare_features(ctx: DayContext) -> dict:
 
 def run_model(ctx: DayContext) -> dict:
     assert ctx.features is not None, "сначала prepare_features"
-    out = {}
     for t in TURBINES:
         ctx.preds[t] = predict(t, ctx.features)
-        p = ctx.preds[t]["power_pred"]
+    return _prediction_summary(ctx)
+
+
+def _prediction_summary(ctx: DayContext) -> dict:
+    out = {}
+    for t, prediction in ctx.preds.items():
+        p = prediction["power_pred"]
         out[f"turbine_{t}"] = {
             "mean": round(float(p.mean()), 3), "max": round(float(p.max()), 3),
             "hours": len(p),
@@ -65,7 +70,7 @@ def run_model(ctx: DayContext) -> dict:
 
 
 def validate_forecast(ctx: DayContext) -> dict:
-    """Физические границы, полнота 48 часов, деградация со вторым горизонтом."""
+    """Границы мощности, число часов, пропуски и подозрительно постоянный прогноз."""
     assert ctx.preds, "сначала run_model"
     checks = {}
     for t, p in ctx.preds.items():
@@ -78,10 +83,30 @@ def validate_forecast(ctx: DayContext) -> dict:
             "has_nan": bool(pr.isna().any()),
             "flatline": bool(pr.std() < 1e-4),  # подозрительно постоянный прогноз
         }
-    ok = all(c["in_bounds_0_1"] and c["hours_ok"] and not c["has_nan"] and not c["flatline"]
-             for c in checks.values())
+    ok = set(ctx.preds) == set(TURBINES) and all(
+        c["in_bounds_0_1"] and c["hours_ok"] and not c["has_nan"] and not c["flatline"]
+        for c in checks.values())
     ctx.validation = {"ok": ok, "checks": checks}
     return ctx.validation
+
+
+def recover_baseline(ctx: DayContext) -> dict:
+    """Один резервный расчёт на той же архивной погоде, без подмены выпуска NWP.
+
+    Берём уже рассчитанную изотоническую кривую мощности для обеих турбин.
+    Квантили обучены для ансамбля, поэтому к резервному прогнозу не относятся.
+    """
+    if not ctx.validation or ctx.validation["ok"]:
+        raise ValueError("Резерв нужен только после неудачной валидации")
+    reason = ctx.validation["checks"]
+    for turbine, prediction in ctx.preds.items():
+        recovered = prediction.drop(columns=["power_p10", "power_p90"], errors="ignore").copy()
+        recovered["power_pred"] = recovered["power_baseline"]
+        ctx.preds[turbine] = recovered
+    ctx.validation = None
+    return {"strategy": "physical_baseline", "reason": reason,
+            "weather_changed": False, "intervals_available": False,
+            "forecast": _prediction_summary(ctx)}
 
 
 def compare_with_previous(ctx: DayContext) -> dict:
@@ -111,6 +136,8 @@ def compare_with_previous(ctx: DayContext) -> dict:
 
 def write_outputs(ctx: DayContext, analysis: str) -> dict:
     """CSV прогноза на каждый день + markdown-отчёт агента."""
+    if not ctx.validation or not ctx.validation["ok"] or set(ctx.preds) != set(TURBINES):
+        raise ValueError("Запись разрешена только после успешной валидации обеих турбин")
     FORECASTS.mkdir(exist_ok=True)
     files = []
     for t, p in ctx.preds.items():

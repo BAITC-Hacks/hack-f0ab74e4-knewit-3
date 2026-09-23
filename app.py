@@ -35,7 +35,6 @@ def _actual(turbine: int) -> pd.Series:
     return load_hourly(turbine)["power"]
 
 
-@st.cache_data(show_spinner=False)
 def _daily_forecast(turbine: int, issue: str) -> pd.DataFrame | None:
     path = FORECASTS / f"forecast_t{turbine}_{issue}.csv"
     if not path.is_file():
@@ -43,21 +42,19 @@ def _daily_forecast(turbine: int, issue: str) -> pd.DataFrame | None:
     return pd.read_csv(path, parse_dates=["datetime"]).set_index("datetime")
 
 
-@st.cache_data(show_spinner=False)
 def _trace(issue: str) -> dict | None:
     path = FORECASTS / f"trace_{issue}.json"
     return json.loads(path.read_text()) if path.is_file() else None
 
 
-@st.cache_data(show_spinner=False)
 def _report(issue: str) -> str | None:
     path = FORECASTS / f"report_{issue}.md"
     return path.read_text() if path.is_file() else None
 
 
-@st.cache_data(show_spinner="Расчёт прогноза на дату holdout…")
+@st.cache_data(show_spinner="Расчёт на историческую дату…")
 def _holdout_forecast(turbine: int, issue: str) -> pd.DataFrame:
-    """Прогноз на дату из holdout — считается на лету, чтобы сверить с фактом."""
+    """Иллюстрация на обучающих данных финальной модели; не независимая оценка."""
     from src.features.build import build_features
     from src.models.predict import predict
     from src.weather.openmeteo import get_issued_forecast
@@ -79,7 +76,9 @@ def _issue_dates() -> list[str]:
 
 # ---------------------------------------------------------------- граф
 
-STATUS_STYLE = {"ok": (GREEN, "✓"), "error": ("#B3261E", "✕"), "retry": (AMBER, "↻")}
+STATUS_STYLE = {"ok": (GREEN, "✓"), "error": ("#B3261E", "✕"), "retry": (AMBER, "↻"),
+                "invalid": ("#B3261E", "✕"), "fallback": (AMBER, "↻"),
+                "rejected": (AMBER, "!")}
 
 
 def render_graph(trace: dict | None) -> None:
@@ -109,12 +108,19 @@ def render_graph(trace: dict | None) -> None:
     retried = (trace or {}).get("retried")
     banner = ("" if not retried else
               f"<div style='font:500 12px system-ui;color:{AMBER};margin-bottom:8px'>"
-              "↻ Валидация не прошла с первой попытки — граф выполнил повторный цикл</div>")
+              "↻ Валидация не прошла с первой попытки — см. попытку восстановления в журнале</div>")
     st.markdown(banner + "<div style='display:flex;gap:8px;flex-wrap:wrap'>"
                 + "".join(cells) + "</div>", unsafe_allow_html=True)
-    st.caption("Условное ребро: validate_forecast → fetch_weather при неудачной валидации "
-               "(одна попытка), иначе → compare_with_previous. Трасса пишется в "
-               "forecasts/trace_<дата>.json.")
+    st.caption("При неудачной валидации: recover_baseline → validate_forecast (одна попытка). "
+               "Публикация разрешена только после успешной проверки. "
+               "Ниже — сохранённые события выбранного запуска.")
+    if trace and trace.get("completed") is False:
+        st.warning("Текущий запуск не завершён. Ранее сохранённые CSV этой даты "
+                   "не считаются результатом текущего запуска.")
+    if trace and trace.get("fallback"):
+        st.info("LLM не завершил день: граф продолжен детерминированно с сохранённого шага.")
+    with st.expander("Структурированный журнал шагов"):
+        st.json(trace)
 
 
 # ---------------------------------------------------------------- графики
@@ -189,7 +195,7 @@ st.caption("Шелекский коридор, Алматинская облас
 with st.sidebar:
     st.markdown("### Режим")
     mode = st.radio("Режим", ["Тестовый период (февраль 2026)",
-                              "Проверка на holdout (есть факт)"],
+                              "Историческая иллюстрация (есть факт)"],
                     label_visibility="collapsed")
     turbine = st.selectbox("Турбина", list(TURBINES), format_func=lambda t: f"Турбина {t}")
 
@@ -209,9 +215,11 @@ with st.sidebar:
     st.markdown(f"**Координаты**  \n`{lat}, {lon}`")
     rep = _train_report().get(str(turbine), {})
     if rep:
-        st.markdown(f"**MAE на holdout**  \n`{rep['lightgbm']['mae']:.4f}`  \n"
+        st.markdown(f"**MAE при подборе модели**  \n`{rep['lightgbm']['mae']:.4f}`  \n"
                     f"0–24 ч `{rep['by_lead']['1']['mae']:.4f}` · "
                     f"24–48 ч `{rep['by_lead']['2']['mae']:.4f}`")
+        st.caption("Один LightGBM, декабрь–январь использованы для early stopping и бленда.")
+    st.button("Обновить результаты")
 
 if not issue:
     st.warning("Прогнозы не найдены. Сначала выполните "
@@ -220,11 +228,20 @@ if not issue:
 
 holdout_mode = not mode.startswith("Тестовый")
 
+if not holdout_mode:
+    current_trace = _trace(issue)
+    if current_trace and current_trace.get("completed") is False:
+        st.error("Прогноз этого запуска недоступен: выполнение не завершилось успешно.")
+        render_graph(current_trace)
+        st.stop()
+
 # --- прогноз и факт
 if holdout_mode:
     pred = _holdout_forecast(turbine, issue)
     actual = _actual(turbine).reindex(pred.index)
-    subtitle = "прогноз рассчитан на лету, факт известен — видно качество модели"
+    subtitle = "историческая иллюстрация финальной модели"
+    st.warning("Финальная модель обучена в том числе на этих датах. График и MAE дня "
+               "показывают подгонку к известным данным, а не качество на независимом тесте.")
 else:
     pred = _daily_forecast(turbine, issue)
     actual = _actual(turbine).reindex(pred.index) if pred is not None else None

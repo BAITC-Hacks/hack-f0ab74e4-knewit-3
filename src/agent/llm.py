@@ -30,8 +30,9 @@ def anthropic_chat_loop(system: str, tool_defs: list[dict], user_msg: str,
         messages.append({"role": "assistant", "content": resp.content})
         results, done = [], False
         for call in calls:
-            out = run_tool(call.name, call.input)
-            done = done or call.name == "write_outputs"
+            out = ({"error": "Вызывай только один инструмент за ответ и дождись его результата"}
+                   if len(calls) > 1 else run_tool(call.name, call.input))
+            done = done or (call.name == "write_outputs" and "error" not in out)
             results.append({"type": "tool_result", "tool_use_id": call.id,
                             "content": json.dumps(out, ensure_ascii=False)})
         messages.append({"role": "user", "content": results})
@@ -108,9 +109,12 @@ def openai_chat_loop(system: str, tool_defs: list[dict], user_msg: str,
         messages.append(msg)
         done = False
         for call in calls:
-            args = json.loads(call["function"]["arguments"] or "{}")
-            out = run_tool(call["function"]["name"], args)
-            done = done or call["function"]["name"] == "write_outputs"
+            if len(calls) > 1:
+                out = {"error": "Вызывай только один инструмент за ответ и дождись его результата"}
+            else:
+                args = json.loads(call["function"]["arguments"] or "{}")
+                out = run_tool(call["function"]["name"], args)
+            done = done or (call["function"]["name"] == "write_outputs" and "error" not in out)
             messages.append({"role": "tool", "tool_call_id": call["id"],
                              "content": json.dumps(out, ensure_ascii=False)})
         if done:

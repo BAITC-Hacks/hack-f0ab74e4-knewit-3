@@ -43,3 +43,18 @@ def test_turbine_switch_keeps_app_alive():
     at = _run(0)
     at.selectbox[0].select(2).run()
     assert not at.exception, f"переключение турбины упало: {at.exception}"
+
+
+def test_failed_rerun_hides_previous_forecast(tmp_path, monkeypatch):
+    import json
+    from src import config
+
+    monkeypatch.setattr(config, "FORECASTS", tmp_path)
+    (tmp_path / "forecast_t1_2026-02-10.csv").write_text("старый файл не должен читаться")
+    (tmp_path / "trace_2026-02-10.json").write_text(json.dumps({
+        "issue_date": "2026-02-10", "completed": False, "trace": [],
+    }))
+    at = AppTest.from_file(str(APP), default_timeout=TIMEOUT).run()
+    assert not at.exception
+    assert any("недоступен" in error.value for error in at.error)
+    assert not at.metric

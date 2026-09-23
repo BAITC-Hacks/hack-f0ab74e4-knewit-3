@@ -1,11 +1,4 @@
-"""Агентный цикл: LLM оркестрирует прогнозный день через тулы.
-
-Режимы:
-- LLM-агент (нужен ключ OpenAI или Anthropic): модель вызывает тулы, анализирует их выход,
-  решает о пересчёте и пишет содержательный отчёт.
-- --no-llm: тот же конвейер в штатном порядке с шаблонным отчётом — воспроизводимость
-  без ключей (ADR-003).
-"""
+"""LLM вызывает инструменты общего графа и пишет отчёт; без ключа граф идёт по шаблону."""
 from __future__ import annotations
 
 import json
@@ -20,10 +13,15 @@ SYSTEM = """Ты — операционный агент прогнозиров�
 на следующие 48 часов, используя ТОЛЬКО архивный прогноз погоды, доступный в день D.
 
 Порядок: fetch_weather -> prepare_features -> run_model -> validate_forecast ->
-compare_with_previous -> write_outputs. Если валидация провалилась — попробуй понять причину
-по выходам тулов и запусти цепочку повторно (не более одного повтора), затем честно опиши
-проблему в отчёте. Если compare_with_previous показывает significant_update=true — отметь
-в отчёте, что вход существенно обновился и прогноз пересчитан свежими данными (это штатно).
+compare_with_previous -> write_outputs. Каждый ответ инструмента содержит next_tool:
+вызывай именно его, строго один инструмент за ответ. Дождись результата перед следующим
+вызовом и составляй отчёт только по полученным данным.
+При неудачной валидации граф разрешает один recover_baseline, затем
+повторную validate_forecast. Это замена ансамбля физической кривой мощности на той же
+архивной погоде, а не получение свежего выпуска. Объясни причину в отчёте. Если резерв
+также не проходит проверки, граф останавливается без публикации прогноза.
+significant_update=true означает отличие от вчерашнего прогноза на общие часы;
+оно само по себе не доказывает изменение погодных данных.
 
 В финале вызови write_outputs, передав analysis — краткий отчёт по-русски: погодная ситуация,
 ожидаемая выработка обеих турбин, качество входных данных, отличия от вчерашнего запуска,
@@ -38,6 +36,8 @@ TOOL_DEFS = [
      "input_schema": {"type": "object", "properties": {}}},
     {"name": "validate_forecast", "description": "Проверить прогноз: границы 0..1, полнота 48ч, аномалии",
      "input_schema": {"type": "object", "properties": {}}},
+    {"name": "recover_baseline", "description": "После провала валидации один раз применить физический baseline; затем нужна повторная проверка",
+     "input_schema": {"type": "object", "properties": {}}},
     {"name": "compare_with_previous", "description": "Сравнить с прогнозом предыдущего дня (дрейф входных данных)",
      "input_schema": {"type": "object", "properties": {}}},
     {"name": "write_outputs", "description": "Записать CSV прогнозов и markdown-отчёт. Завершает день.",
@@ -47,22 +47,11 @@ TOOL_DEFS = [
 ]
 
 
-def _run_tool(name: str, args: dict, ctx: T.DayContext) -> dict:
-    fn = {"fetch_weather": T.fetch_weather, "prepare_features": T.prepare_features,
-          "run_model": T.run_model, "validate_forecast": T.validate_forecast,
-          "compare_with_previous": T.compare_with_previous}.get(name)
-    if fn:
-        return fn(ctx)
-    if name == "write_outputs":
-        return T.write_outputs(ctx, args.get("analysis", ""))
-    return {"error": f"неизвестный тул {name}"}
-
-
 def _template_analysis(outputs: dict, _ctx: T.DayContext) -> str:
     """Отчёт детерминированного режима — из выходов узлов графа."""
     w = outputs.get("fetch_weather", {})
     f = outputs.get("prepare_features", {})
-    m = outputs.get("run_model", {})
+    m = outputs.get("recover_baseline", {}).get("forecast", outputs.get("run_model", {}))
     v = outputs.get("validate_forecast", {})
     c = outputs.get("compare_with_previous", {})
     return (
@@ -71,7 +60,7 @@ def _template_analysis(outputs: dict, _ctx: T.DayContext) -> str:
         f"макс {w.get('wind100_max_ms')} м/с, часов без данных: "
         f"{w.get('hours_without_any_model')}.\n"
         f"- Признаки: {f.get('rows')} часов x {f.get('n_features')}.\n"
-        f"- Прогноз: {json.dumps(m, ensure_ascii=False)}.\n"
+        f"- Итоговый прогноз: {json.dumps(m, ensure_ascii=False)}.\n"
         f"- Валидация: {'OK' if v.get('ok') else 'ПРОБЛЕМЫ: ' + json.dumps(v.get('checks', {}), ensure_ascii=False)}.\n"
         f"- Сравнение с прошлым запуском: {json.dumps(c, ensure_ascii=False)}.\n"
     )
@@ -89,6 +78,7 @@ def run_day_llm(issue_date: str, weather: pd.DataFrame) -> dict:
     Бэкенд выбирается по ключам окружения (src/agent/llm.py). Если агент не довёл цикл
     до write_outputs — день достраивается детерминированно, прогноз не теряется."""
     from src.agent.llm import anthropic_chat_loop, openai_chat_loop, pick_backend
+    from src.agent.graph import DayGraph
 
     backend = pick_backend()
     if backend == "none":
@@ -96,23 +86,18 @@ def run_day_llm(issue_date: str, weather: pd.DataFrame) -> dict:
     model = os.environ.get("LLM_MODEL", "по умолчанию")
     print(f"  [{issue_date}] LLM: {backend} / {model}")
 
-    ctx = T.DayContext(issue_date, weather)
-    result: dict | None = None
-
-    def run_tool(name: str, args: dict) -> dict:
-        nonlocal result
-        out = _run_tool(name, args, ctx)
-        if name == "write_outputs":
-            result = {"issue_date": issue_date,
-                      "validation_ok": bool(ctx.validation and ctx.validation["ok"]), **out}
-        return out
-
+    graph = DayGraph(issue_date, weather, mode=backend)
     user_msg = f"День запуска: {issue_date}. Выполни полный цикл прогноза на 48 часов."
     loop_fn = anthropic_chat_loop if backend == "anthropic" else openai_chat_loop
     try:
-        loop_fn(SYSTEM, TOOL_DEFS, user_msg, run_tool)
-    except Exception as e:  # сеть/лимиты LLM не должны ронять прогон
-        print(f"  [{issue_date}] LLM-бэкенд {backend} упал ({e}), достраиваю без LLM")
-    if result is None:
-        return run_day_no_llm(issue_date, weather)
-    return result
+        loop_fn(SYSTEM, TOOL_DEFS, user_msg, graph.execute)
+    except Exception as exc:
+        if graph.error:
+            raise  # Ошибка расчёта не исправляется сменой LLM на шаблон.
+        if not graph.completed:
+            graph.use_fallback(f"{type(exc).__name__}: {exc}")
+    if not graph.completed and not graph.fallback:
+        graph.use_fallback("LLM завершил ответ или исчерпал шаги до write_outputs")
+    if graph.fallback:
+        print(f"  [{issue_date}] Продолжаю без LLM с узла {graph.node}")
+    return graph.finish(_template_analysis)
