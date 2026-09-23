@@ -1,11 +1,10 @@
 """Клиент Open-Meteo Previous Runs API: архив прогнозов с заданным упреждением.
 
-Семантика по документации Open-Meteo (docs/FEATURE_AVAILABILITY.md): значение колонки
-`<var>_previous_dayN` в час T — «the value that was predicted N*24 hours before valid time»,
-то есть из прогона, инициализированного не позже чем за N суток до T. Выпуск «в день D
-на 48 часов» = previous_day1 для часов дня D+1 и previous_day2 для часов дня D+2; это
-скользящий набор прогонов, а не один прогон. Это прогнозы, не реанализ; точное время
-публикации значений в кэше отсутствует, доступность к концу D отдельно не доказана.
+Колонки `<var>_previous_dayN` задают упреждение относительно целевого часа;
+Previous Runs объединяет значения разных погодных прогонов. Приложение выбирает
+previous_day1 для дня D+1 и previous_day2 для дня D+2. Такой срез не содержит точных
+меток инициализации и публикации каждого значения; доступность всего среза к концу D
+по кэшу не доказана. Семантика и ограничения — docs/FEATURE_AVAILABILITY.md.
 Все ответы кэшируются в data/weather_cache/ — повторные запуски работают офлайн.
 """
 from __future__ import annotations
@@ -13,6 +12,7 @@ from __future__ import annotations
 import json
 import hashlib
 from datetime import date, timedelta
+from pathlib import Path
 
 import httpx
 import pandas as pd
@@ -23,7 +23,7 @@ from src.config import (LEAD_DAYS, TIMEZONE, WEATHER_CACHE, WEATHER_MODELS,
 API = "https://previous-runs-api.open-meteo.com/v1/forecast"
 
 
-def _cache_path(model: str, start: str, end: str) -> "Path":
+def _cache_path(model: str, start: str, end: str) -> Path:
     key = hashlib.md5(f"{model}|{start}|{end}|{','.join(WEATHER_VARS)}".encode()).hexdigest()[:10]
     return WEATHER_CACHE / f"{model}_{start}_{end}_{key}.json"
 

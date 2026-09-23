@@ -105,7 +105,7 @@ def _build_submission(*, output_dir: Path | None = None) -> None:
 
 
 def cmd_check_tz(_args) -> None:
-    """Сдвиг максимальной корреляции прогнозного и измеренного ветра должен быть 0 (ADR-006)."""
+    """Диагностика часового сдвига; максимум корреляции сам по себе не доказывает ошибку времени."""
     from src.features.dataset import load_hourly
     weather = _load_weather()
     ws = weather["best_match__wind_speed_100m__d1"]
@@ -115,7 +115,7 @@ def cmd_check_tz(_args) -> None:
         corrs = {lag: joined.iloc[:, 0].shift(lag).corr(joined.iloc[:, 1])
                  for lag in range(-6, 7)}
         best = max(corrs, key=corrs.get)
-        status = "OK" if best == 0 else "ОШИБКА СКЛЕЙКИ ВРЕМЕНИ"
+        status = "максимум при нулевом лаге" if best == 0 else "проверьте временную шкалу и смещение прогноза"
         print(f"Турбина {t}: лучший лаг {best} (corr={corrs[best]:.3f}) — {status}")
 
 
@@ -127,7 +127,7 @@ def cmd_list_models(_args) -> None:
 
     key = os.environ.get("LLM_API_KEY") or os.environ.get("OPENAI_API_KEY")
     if not key:
-        print("Нет LLM_API_KEY в .env — заполните по образцу .env.example")
+        print("Нет OPENAI_API_KEY или LLM_API_KEY — заполните .env по образцу .env.example")
         return
     base = os.environ.get("LLM_BASE_URL", "https://api.openai.com/v1").rstrip("/")
     r = httpx.get(f"{base}/models", headers={"Authorization": f"Bearer {key}"}, timeout=60)
@@ -135,11 +135,13 @@ def cmd_list_models(_args) -> None:
     names = sorted(m["id"] for m in r.json().get("data", []))
     chat = [n for n in names if not any(x in n for x in
             ("embed", "tts", "whisper", "dall-e", "image", "moderation", "audio", "realtime"))]
-    print(f"Доступно моделей: {len(names)}, из них пригодны для агента:\n")
+    print(f"Доступно моделей: {len(names)}. Кандидаты после фильтра по имени "
+          "(поддержка инструментов ещё не проверена):\n")
     for n in chat:
         print(" ", n)
     print("\nВыбранную подставьте в LLM_MODEL в .env и проверьте одним днём:\n"
-          "  python -m src.cli run-agent --start 2026-02-10 --end 2026-02-10")
+          "  python -m src.cli run-agent --start 2026-02-10 --end 2026-02-10 "
+          "--output-dir runs/llm-check")
 
 
 def main() -> None:

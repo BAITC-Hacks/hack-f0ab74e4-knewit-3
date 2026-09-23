@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 def _load_dotenv() -> None:
-    """Мини-загрузчик .env без сторонних зависимостей (секреты — ADR/CLAUDE.md п.6)."""
+    """Загрузка локального .env без замены уже заданных переменных окружения."""
     env = Path(__file__).resolve().parent.parent / ".env"
     if env.exists():
         for line in env.read_text().splitlines():
@@ -31,14 +31,14 @@ TIMEZONE = "Asia/Almaty"  # таймзона датасета, ADR-006
 # Архив previous-runs покрыт с марта 2024 (проверено живыми запросами 23.09.2026)
 TRAIN_START = "2024-03-01"
 TRAIN_END = "2025-11-30"      # обучение
-HOLDOUT_START = "2025-12-01"  # holdout: декабрь 2025 + январь 2026
+HOLDOUT_START = "2025-12-01"  # период настройки; имя сохранено для совместимости
 HOLDOUT_END = "2026-01-31"
 TEST_START = "2026-02-01"     # тестовый период организаторов
 TEST_END = "2026-02-28"
 
 # Погодные модели Open-Meteo: мини-ансамбль источников.
-# Отбор по корреляции прогноза с измеренным ветром на holdout (см. RESEARCH.md):
-# ukmo 0.740, icon 0.735, ecmwf 0.724, best_match 0.703, gfs 0.655; jma/cma — шум, исключены.
+# Исторический отбор по связи прогнозного и измеренного ветра на периоде настройки.
+# Сравнение источников и ограничения оценки — docs/RESEARCH.md.
 WEATHER_MODELS = ["best_match", "ecmwf_ifs025", "gfs_seamless", "icon_seamless",
                   "ukmo_global_deterministic_10km"]
 

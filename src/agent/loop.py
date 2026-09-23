@@ -11,7 +11,9 @@ from src.agent import tools as T
 
 SYSTEM = """Ты — операционный агент прогнозирования выработки ветроэлектростанции (2 турбины,
 Шелекский коридор, Казахстан). Твоя задача на каждый день D: выполнить полный цикл прогноза
-на следующие 48 часов, используя ТОЛЬКО архивный прогноз погоды, доступный в день D.
+на следующие 48 часов из архивного прогноза Previous Runs: lead 1 для D+1, lead 2 для D+2.
+Входы содержат прогнозную погоду, а не наблюдения. Время публикации в архиве отсутствует:
+не утверждай, что все значения были доступны к конкретному часу дня D.
 
 Порядок: fetch_weather -> prepare_features -> run_model -> validate_forecast ->
 compare_with_previous -> write_outputs. Каждый ответ инструмента содержит next_tool:
@@ -29,7 +31,7 @@ significant_update=true означает отличие от вчерашнег�
 замечания. Пиши как оператор ВЭС, конкретно и без воды."""
 
 TOOL_DEFS = [
-    {"name": "fetch_weather", "description": "Получить архивный прогноз погоды на 48ч, доступный в день запуска",
+    {"name": "fetch_weather", "description": "Получить срез архивного прогноза Previous Runs для даты запуска",
      "input_schema": {"type": "object", "properties": {}}},
     {"name": "prepare_features", "description": "Построить матрицу фич из полученного прогноза",
      "input_schema": {"type": "object", "properties": {}}},
@@ -39,7 +41,7 @@ TOOL_DEFS = [
      "input_schema": {"type": "object", "properties": {}}},
     {"name": "recover_baseline", "description": "После провала валидации один раз применить физический baseline; затем нужна повторная проверка",
      "input_schema": {"type": "object", "properties": {}}},
-    {"name": "compare_with_previous", "description": "Сравнить с прогнозом предыдущего дня (дрейф входных данных)",
+    {"name": "compare_with_previous", "description": "Сравнить прогноз мощности с предыдущим выпуском на общие часы",
      "input_schema": {"type": "object", "properties": {}}},
     {"name": "write_outputs", "description": "Записать CSV прогнозов и markdown-отчёт. Завершает день.",
      "input_schema": {"type": "object", "properties": {

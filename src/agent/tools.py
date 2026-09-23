@@ -2,11 +2,9 @@
 работают и без LLM (режим --no-llm вызывает их в штатном порядке)."""
 from __future__ import annotations
 
-import json
 from datetime import date, timedelta
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 from src.config import FORECASTS, TURBINES

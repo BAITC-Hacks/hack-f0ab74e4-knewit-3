@@ -1,1 +1,195 @@
-<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='300' viewBox='0 0 1200 300' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif'><rect x='0.5' y='0.5' width='1199' height='299' rx='10' fill='#fcfcfb' stroke='#e6e5e1'/><text x='24' y='26' font-size='17' fill='#0b0b0b' text-anchor='start' font-weight='600' >Лестница моделей: MAE нормализованной мощности, турбина 1</text><text x='24' y='46' font-size='12' fill='#52514e' text-anchor='start' font-weight='normal' >Период настройки 12.2025–01.2026 (использовался для ранней остановки и выбора источников — не независимый тест) · docs/RESEARCH.md §3.1</text><line x1='330.0' y1='62' x2='330.0' y2='270' stroke='#e6e5e1'/><text x='330.0' y='286' font-size='11' fill='#52514e' text-anchor='middle' font-weight='normal' >0.0</text><line x1='525.0' y1='62' x2='525.0' y2='270' stroke='#e6e5e1'/><text x='525.0' y='286' font-size='11' fill='#52514e' text-anchor='middle' font-weight='normal' >0.1</text><line x1='720.0' y1='62' x2='720.0' y2='270' stroke='#e6e5e1'/><text x='720.0' y='286' font-size='11' fill='#52514e' text-anchor='middle' font-weight='normal' >0.2</text><line x1='915.0' y1='62' x2='915.0' y2='270' stroke='#e6e5e1'/><text x='914.9999999999999' y='286' font-size='11' fill='#52514e' text-anchor='middle' font-weight='normal' >0.3</text><line x1='1110.0' y1='62' x2='1110.0' y2='270' stroke='#e6e5e1'/><text x='1110.0' y='286' font-size='11' fill='#52514e' text-anchor='middle' font-weight='normal' >0.4</text><text x='318' y='94.0' font-size='13' fill='#0b0b0b' text-anchor='end' font-weight='normal' >Наивный persistence (сутки назад)</text><rect x='330' y='78' width='735.2' height='24' rx='4' fill='#b8b6ad'/><text x='1073.15' y='94.0' font-size='12' fill='#0b0b0b' text-anchor='start' font-weight='600' >0.377</text><text x='318' y='134.0' font-size='13' fill='#0b0b0b' text-anchor='end' font-weight='normal' >Климатология (среднее по часу суток)</text><rect x='330' y='118' width='626.0' height='24' rx='4' fill='#b8b6ad'/><text x='963.95' y='134.0' font-size='12' fill='#0b0b0b' text-anchor='start' font-weight='600' >0.321</text><text x='318' y='174.0' font-size='13' fill='#0b0b0b' text-anchor='end' font-weight='normal' >Физическая кривая мощности</text><rect x='330' y='158' width='360.8' height='24' rx='4' fill='#b8b6ad'/><text x='698.75' y='174.0' font-size='12' fill='#0b0b0b' text-anchor='start' font-weight='600' >0.185</text><text x='318' y='214.0' font-size='13' fill='#0b0b0b' text-anchor='end' font-weight='600' >LightGBM-ансамбль (подача)</text><rect x='330' y='198' width='321.8' height='24' rx='4' fill='#2a78d6'/><text x='659.75' y='214.0' font-size='12' fill='#0b0b0b' text-anchor='start' font-weight='600' >0.165</text><text x='318' y='254.0' font-size='13' fill='#0b0b0b' text-anchor='end' font-weight='600' >Оракул: идеальный прогноз ветра (предел)</text><rect x='330' y='238' width='60.4' height='24' rx='4' fill='#1baf7a'/><text x='398.45' y='254.0' font-size='12' fill='#0b0b0b' text-anchor='start' font-weight='600' >0.031</text><text x='721.75' y='214.0' font-size='12' fill='#52514e' text-anchor='start' font-weight='normal' >← в 2.3 раза точнее persistence</text><text x='460.45' y='254.0' font-size='12' fill='#52514e' text-anchor='start' font-weight='normal' >← ~80% оставшейся ошибки — ошибка прогноза ветра NWP, не кривой мощности</text></svg>
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="864pt" height="252pt" viewBox="0 0 864 252" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:description>Source: models_artifacts/train_report.json, baseline.mae and lightgbm.mae for turbines 1 and 2. Tuning metrics, not independent evaluation.</dc:description>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.11.2, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 252
+L 864 252
+L 864 0
+L 0 0
+z
+" style="fill: #fcfcfb"/>
+  </g>
+  <g id="axes_1">
+   <g id="patch_2">
+    <path d="M 99.36 191.52
+L 812.16 191.52
+L 812.16 60.48
+L 99.36 60.48
+z
+" style="fill: #fcfcfb"/>
+   </g>
+   <g id="matplotlib.axis_1">
+    <g id="xtick_1">
+     <g id="line2d_1">
+      <path d="M 99.36 191.52
+L 99.36 60.48
+" clip-path="url(#p4da89b4ffd)" style="fill: none; stroke: #e6e5e1; stroke-width: 0.8; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_2"/>
+     <g id="text_1">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle" x="99.36" y="206.117656" transform="rotate(-0 99.36 206.117656)">0.00</text>
+     </g>
+    </g>
+    <g id="xtick_2">
+     <g id="line2d_3">
+      <path d="M 251.019574 191.52
+L 251.019574 60.48
+" clip-path="url(#p4da89b4ffd)" style="fill: none; stroke: #e6e5e1; stroke-width: 0.8; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_4"/>
+     <g id="text_2">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle" x="251.019574" y="206.117656" transform="rotate(-0 251.019574 206.117656)">0.05</text>
+     </g>
+    </g>
+    <g id="xtick_3">
+     <g id="line2d_5">
+      <path d="M 402.679149 191.52
+L 402.679149 60.48
+" clip-path="url(#p4da89b4ffd)" style="fill: none; stroke: #e6e5e1; stroke-width: 0.8; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_6"/>
+     <g id="text_3">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle" x="402.679149" y="206.117656" transform="rotate(-0 402.679149 206.117656)">0.10</text>
+     </g>
+    </g>
+    <g id="xtick_4">
+     <g id="line2d_7">
+      <path d="M 554.338723 191.52
+L 554.338723 60.48
+" clip-path="url(#p4da89b4ffd)" style="fill: none; stroke: #e6e5e1; stroke-width: 0.8; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_8"/>
+     <g id="text_4">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle" x="554.338723" y="206.117656" transform="rotate(-0 554.338723 206.117656)">0.15</text>
+     </g>
+    </g>
+    <g id="xtick_5">
+     <g id="line2d_9">
+      <path d="M 705.998298 191.52
+L 705.998298 60.48
+" clip-path="url(#p4da89b4ffd)" style="fill: none; stroke: #e6e5e1; stroke-width: 0.8; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_10"/>
+     <g id="text_5">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle" x="705.998298" y="206.117656" transform="rotate(-0 705.998298 206.117656)">0.20</text>
+     </g>
+    </g>
+    <g id="text_6">
+     <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle" x="455.76" y="220.117656" transform="rotate(-0 455.76 220.117656)">MAE нормализованной мощности</text>
+    </g>
+   </g>
+   <g id="matplotlib.axis_2">
+    <g id="ytick_1">
+     <g id="line2d_11"/>
+     <g id="text_7">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: end" x="92.36" y="91.004717" transform="rotate(-0 92.36 91.004717)">Турбина 1</text>
+     </g>
+    </g>
+    <g id="ytick_2">
+     <g id="line2d_12"/>
+     <g id="text_8">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: end" x="92.36" y="168.764033" transform="rotate(-0 92.36 168.764033)">Турбина 2</text>
+     </g>
+    </g>
+   </g>
+   <g id="patch_3">
+    <path d="M 99.36 66.436364
+L 660.164757 66.436364
+L 660.164757 86.031711
+L 99.36 86.031711
+z
+" clip-path="url(#p4da89b4ffd)" style="fill: #b8b6ad"/>
+   </g>
+   <g id="patch_4">
+    <path d="M 99.36 144.19568
+L 665.195842 144.19568
+L 665.195842 163.791028
+L 99.36 163.791028
+z
+" clip-path="url(#p4da89b4ffd)" style="fill: #b8b6ad"/>
+   </g>
+   <g id="patch_5">
+    <path d="M 99.36 88.208972
+L 598.823781 88.208972
+L 598.823781 107.80432
+L 99.36 107.80432
+z
+" clip-path="url(#p4da89b4ffd)" style="fill: #2a78d6"/>
+   </g>
+   <g id="patch_6">
+    <path d="M 99.36 165.968289
+L 603.585062 165.968289
+L 603.585062 185.563636
+L 99.36 185.563636
+z
+" clip-path="url(#p4da89b4ffd)" style="fill: #2a78d6"/>
+   </g>
+   <g id="text_9">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start" x="665.164757" y="78.831694" transform="rotate(-0 665.164757 78.831694)">0.1849</text>
+   </g>
+   <g id="text_10">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start" x="670.195842" y="156.59101" transform="rotate(-0 670.195842 156.59101)">0.1865</text>
+   </g>
+   <g id="text_11">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start" x="603.823781" y="100.604302" transform="rotate(-0 603.823781 100.604302)">0.1647</text>
+   </g>
+   <g id="text_12">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start" x="608.585062" y="178.363619" transform="rotate(-0 608.585062 178.363619)">0.1662</text>
+   </g>
+  </g>
+  <g id="text_13">
+   <text style="font-weight: 700; font-size: 14px; font-family: 'DejaVu Sans'; text-anchor: start" x="17.28" y="18.655" transform="rotate(-0 17.28 18.655)">Настройка одиночной модели: декабрь 2025 — январь 2026</text>
+  </g>
+  <g id="text_14">
+   <text style="font-size: 9px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #52514e" x="17.28" y="35.28" transform="rotate(-0 17.28 35.28)">Период использован для ранней остановки и веса бленда; качество финального ансамбля здесь не измеряется.</text>
+  </g>
+  <g id="legend_1">
+   <g id="patch_7">
+    <path d="M 276.270312 243.117656
+L 296.270312 243.117656
+L 296.270312 236.117656
+L 276.270312 236.117656
+z
+" style="fill: #b8b6ad"/>
+   </g>
+   <g id="text_15">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start" x="304.270312" y="243.117656" transform="rotate(-0 304.270312 243.117656)">Изотонический baseline</text>
+   </g>
+   <g id="patch_8">
+    <path d="M 449.828125 243.117656
+L 469.828125 243.117656
+L 469.828125 236.117656
+L 449.828125 236.117656
+z
+" style="fill: #2a78d6"/>
+   </g>
+   <g id="text_16">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start" x="477.828125" y="243.117656" transform="rotate(-0 477.828125 243.117656)">Одиночная LightGBM</text>
+   </g>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="p4da89b4ffd">
+   <rect x="99.36" y="60.48" width="712.8" height="131.04"/>
+  </clipPath>
+ </defs>
+</svg>
