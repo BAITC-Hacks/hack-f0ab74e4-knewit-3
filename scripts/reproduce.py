@@ -144,7 +144,13 @@ def manifest_mismatches(snapshot: dict[str, str], manifest_path: Path) -> dict[s
     моделей и прогнозов должен совпадать с тем, который интегратор проверил.
     """
     manifest = json.loads(manifest_path.read_text())
-    expected = {**manifest.get("input_sha256", {}), **manifest.get("output_sha256", {})}
+    if not isinstance(manifest, dict):
+        raise ReproductionError("манифест должен содержать JSON-объект")
+    for section in ("input_sha256", "output_sha256"):
+        hashes = manifest.get(section)
+        if not isinstance(hashes, dict) or not hashes:
+            raise ReproductionError(f"манифест: {section} должен быть непустым объектом SHA256")
+    expected = {**manifest["input_sha256"], **manifest["output_sha256"]}
     return {
         "missing": sorted(k for k in expected if k not in snapshot),
         "changed": sorted(k for k in expected if k in snapshot and snapshot[k] != expected[k]),
@@ -343,8 +349,19 @@ def replay_evaluation(evaluation_dir: Path, weather, tolerance: float) -> dict:
     problems, max_dev = [], {}
     if skipped:
         problems.append(f"пропущенные выпуски при воспроизведении: {skipped}")
+    for label, frame in (("сохранённой оценке", saved), ("воспроизведённой оценке", produced)):
+        duplicates = int(frame.duplicated(keys).sum())
+        if duplicates:
+            problems.append(f"дубли ключей в {label}: {duplicates}")
+    if len(saved) != len(produced):
+        problems.append(f"число оценочных строк отличается: {len(saved)} vs {len(produced)}")
+    if saved.duplicated(keys).any() or produced.duplicated(keys).any():
+        # Дубли нельзя сливать: many-to-many merge маскирует лишние строки совпадениями.
+        return {"problems": problems, "max_abs_deviation": max_dev,
+                "rows_saved": int(len(saved)), "rows_replayed": int(len(produced)),
+                "rows_beyond_exact": None}
     merged = saved.merge(produced, on=keys, how="outer", suffixes=("_saved", "_new"),
-                         indicator=True)
+                         indicator=True, validate="one_to_one")
     unmatched = int((merged["_merge"] != "both").sum())
     if unmatched:
         problems.append(f"оценочные строки не совпали по ключам: {unmatched}")
@@ -406,9 +423,14 @@ def reproduce(output_dir: Path, *, start: date, end: date, tolerance: float,
     before = snapshot_canonical()
     durations["snapshot_before"] = round(time.time() - t0, 1)
     if MANIFEST.is_file():
-        mism = manifest_mismatches(before, MANIFEST)
-        record("manifest", not mism["missing"] and not mism["changed"],
-               {"files": len(before), **mism})
+        try:
+            mism = manifest_mismatches(before, MANIFEST)
+            # Манифест не может содержать собственный хэш; остальные файлы обязательны.
+            unlisted = set(mism["unlisted"]) - {MANIFEST.relative_to(ROOT).as_posix()}
+            record("manifest", not mism["missing"] and not mism["changed"] and not unlisted,
+                   {"files": len(before), **mism})
+        except (ReproductionError, OSError, ValueError) as exc:
+            record("manifest", False, {"error": str(exc)})
     else:
         record("manifest", False, {"error": f"нет {MANIFEST.relative_to(ROOT)}"})
 
@@ -517,8 +539,10 @@ def main(argv: list[str] | None = None) -> int:
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--output-dir", type=Path, required=True,
                         help="пустой или новый каталог вне data/, models_artifacts/, forecasts/")
-    parser.add_argument("--start", default=DEFAULT_START, help="первая дата выпуска")
-    parser.add_argument("--end", default=DEFAULT_END, help="последняя дата выпуска")
+    parser.add_argument("--start", default=DEFAULT_START,
+                        help=f"первая дата выпуска полного релизного окна: {DEFAULT_START}")
+    parser.add_argument("--end", default=DEFAULT_END,
+                        help=f"последняя дата выпуска полного релизного окна: {DEFAULT_END}")
     parser.add_argument("--tolerance", type=float, default=DEFAULT_TOLERANCE,
                         help="абсолютный допуск сравнения прогнозов с каноническими; метрики "
                              "оценки всегда сверяются с допуском %g" % METRIC_TOLERANCE)
@@ -526,9 +550,16 @@ def main(argv: list[str] | None = None) -> int:
                         help="не воспроизводить оценочные прогнозы сохранёнными моделями")
     args = parser.parse_args(argv)
 
+    if not math.isfinite(args.tolerance) or args.tolerance < 0:
+        print("--tolerance должен быть конечным неотрицательным числом")
+        return 2
     start, end = date.fromisoformat(args.start), date.fromisoformat(args.end)
     if start > end:
         print("Дата --start должна быть не позже --end")
+        return 2
+    if (start.isoformat(), end.isoformat()) != (DEFAULT_START, DEFAULT_END):
+        print(f"Репетиция проверяет полное релизное окно: --start {DEFAULT_START} "
+              f"--end {DEFAULT_END}; частичные диапазоны не поддерживаются")
         return 2
     try:
         output_dir = prepare_output_dir(args.output_dir)

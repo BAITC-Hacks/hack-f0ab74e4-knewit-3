@@ -135,6 +135,49 @@ def test_failed_validation_recovers_once_or_stops_without_publishing(day, monkey
     assert calls == [1, 2]
 
 
+@pytest.mark.parametrize("power", [0.0, 0.97, 1.0])
+@pytest.mark.parametrize("needs_recovery", [False, True])
+def test_flat_forecast_publishes_with_warning(day, monkeypatch, power, needs_recovery):
+    weather, _, folder = day
+    original_predict = tools.predict
+
+    def constant_prediction(turbine, features):
+        frame = original_predict(turbine, features)
+        frame["power_pred"] = np.nan if needs_recovery else power
+        frame["power_baseline"] = power
+        return frame
+
+    monkeypatch.setattr(tools, "predict", constant_prediction)
+    result = loop.run_day_no_llm("2026-02-10", weather)
+    assert result["completed"] and result["validation_ok"]
+    assert result["retried"] == needs_recovery
+    validations = [step["output"] for step in result["trace"]
+                   if step["node"] == "validate_forecast"]
+    assert all(check["flatline"] for check in validations[-1]["checks"].values())
+    assert len(validations[-1]["warnings"]) == 2
+    assert "почти постоян" in (folder / result["report"]).read_text()
+    for name in result["files"]:
+        frame = pd.read_csv(folder / name)
+        np.testing.assert_allclose(frame["power_pred"], power)
+
+
+@pytest.mark.parametrize("power", [-0.01, 1.01])
+def test_flat_forecast_outside_bounds_still_stops_without_publishing(day, monkeypatch, power):
+    weather, _, folder = day
+    original_predict = tools.predict
+
+    def corrupt_prediction(turbine, features):
+        frame = original_predict(turbine, features)
+        frame["power_pred"] = power
+        frame["power_baseline"] = power
+        return frame
+
+    monkeypatch.setattr(tools, "predict", corrupt_prediction)
+    with pytest.raises(RuntimeError, match="валидац"):
+        loop.run_day_no_llm("2026-02-10", weather)
+    assert not list(folder.glob("forecast_*.csv"))
+
+
 def test_tool_failure_saves_error_trace_without_writing_partial_output(day, monkeypatch):
     weather, _, folder = day
 

@@ -15,9 +15,8 @@ services:
 
   # Offline-репетиция релиза без сети: docker compose run --rm reproduce
   # Результат — ./runs/reproduction-docker на хосте; каталог должен быть пустым или новым.
-  # Допуск 0.05 задан явно: канонические числа получены на macOS, glibc в контейнере даёт
-  # 1 ulp разницы в sin/cos признаков и переключает часть порогов LightGBM
-  # (docs/REPRODUCIBILITY.md §6). Метрики оценки сверяются строго независимо от допуска.
+  # Строгий допуск по умолчанию 1e-9; переносимость обеспечивают округлённые признаки
+  # и заново обученный комплект моделей (docs/REPRODUCIBILITY.md §6).
   reproduce:
     image: windcast:latest
     build: .
@@ -25,5 +24,4 @@ services:
     network_mode: none
     volumes:
       - ./runs:/app/runs
-    command: ["python", "-m", "scripts.reproduce", "--output-dir", "/app/runs/reproduction-docker",
-              "--tolerance", "0.05"]
+    command: ["python", "-m", "scripts.reproduce", "--output-dir", "/app/runs/reproduction-docker"]

@@ -70,7 +70,7 @@ def _prediction_summary(ctx: DayContext) -> dict:
 
 
 def validate_forecast(ctx: DayContext) -> dict:
-    """Границы мощности, число часов, пропуски и подозрительно постоянный прогноз."""
+    """Границы мощности, число часов, пропуски; постоянный прогноз — предупреждение."""
     assert ctx.preds, "сначала run_model"
     checks = {}
     for t, p in ctx.preds.items():
@@ -81,12 +81,18 @@ def validate_forecast(ctx: DayContext) -> dict:
             "hours_ok": bool(len(pr) in (24, 48)),
             "hours": int(len(pr)),
             "has_nan": bool(pr.isna().any()),
-            "flatline": bool(pr.std() < 1e-4),  # подозрительно постоянный прогноз
+            "flatline": bool(pr.std() < 1e-4),
         }
     ok = set(ctx.preds) == set(TURBINES) and all(
-        c["in_bounds_0_1"] and c["hours_ok"] and not c["has_nan"] and not c["flatline"]
+        c["in_bounds_0_1"] and c["hours_ok"] and not c["has_nan"]
         for c in checks.values())
     ctx.validation = {"ok": ok, "checks": checks}
+    # Штиль или плато кривой мощности могут дать постоянный корректный прогноз,
+    # в том числе после recovery. Самой малой дисперсии недостаточно для отказа.
+    warnings = [f"{turbine}: почти постоянный прогноз мощности; сверьте с прогнозом ветра."
+                for turbine, check in checks.items() if check["flatline"]]
+    if warnings:
+        ctx.validation["warnings"] = warnings
     return ctx.validation
 
 
@@ -151,5 +157,9 @@ def write_outputs(ctx: DayContext, analysis: str) -> dict:
         df[cols].to_csv(path, index=False)
         files.append(path.name)
     report = ctx.output_dir / f"report_{ctx.issue_date}.md"
+    warnings = ctx.validation.get("warnings", [])
+    if warnings:
+        analysis = analysis.rstrip() + "\n\nПредупреждения валидации:\n\n" + "\n".join(
+            f"- {warning}" for warning in warnings)
     report.write_text(f"# Отчёт агента — запуск {ctx.issue_date}\n\n{analysis.rstrip()}\n")
     return {"files": files, "report": report.name}

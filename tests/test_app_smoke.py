@@ -145,3 +145,129 @@ def test_evaluation_mae_matches_known_csv(tmp_path, monkeypatch):
     shown = {m.label: m.value for m in at.metric}
     mae_label = next(l for l in shown if l.startswith("MAE дня"))
     assert shown[mae_label] == f"{(0.1 + 0.0 + 0.2 + 0.5) / 4:.3f}"
+
+
+@pytest.fixture
+def evaluation_files(tmp_path, monkeypatch):
+    """Небольшой сохранённый выпуск; сеть и февральские CSV тесту не нужны."""
+    from src import config
+    from src.weather import openmeteo
+
+    df = pd.DataFrame({
+        "turbine": 1, "issue_date": "2026-01-13",
+        "datetime": pd.date_range("2026-01-14", periods=3, freq="h"),
+        "lead_day": 1, "power_true": [0.5, 0.3, float("nan")],
+        "power_pred": [0.4, 0.3, 0.8], "power_baseline": 0.5,
+        "power_p10": float("nan"), "power_p90": float("nan"),
+        "target_eligible": True, "trained_through": "2025-11-30",
+    })
+    report = {
+        "schema_version": 1, "protocol": "retrospective-issue-replay-v1",
+        "trained_through": "2025-11-30",
+        "periods": {"evaluate": ["2025-12-01", "2026-01-31"]},
+    }
+    df.to_csv(tmp_path / "evaluation_predictions.csv", index=False)
+    (tmp_path / "evaluation_report.json").write_text(json.dumps(report))
+    monkeypatch.setenv("WINDCAST_EVALUATION_DIR", str(tmp_path))
+    monkeypatch.setattr(config, "FORECASTS", tmp_path / "forecasts")
+
+    def unavailable_weather(*args, **kwargs):
+        raise FileNotFoundError("погодный кэш не установлен")
+
+    monkeypatch.setattr(openmeteo, "get_weather", unavailable_weather)
+    return tmp_path, df, report
+
+
+def test_evaluation_refresh_reads_replaced_csv(evaluation_files):
+    directory, df, _ = evaluation_files
+    at = _run(MODE_EVAL)
+    assert next(m.value for m in at.metric if m.label.startswith("MAE дня")) == "0.050"
+    df["power_pred"] = 0.8
+    df.to_csv(directory / "evaluation_predictions.csv", index=False)
+
+    at.button[0].click().run()
+
+    assert not at.exception
+    assert next(m.value for m in at.metric if m.label.startswith("MAE дня")) == "0.400"
+
+
+def test_evaluation_refresh_recovers_after_missing_files(evaluation_files):
+    directory, df, _ = evaluation_files
+    csv_path = directory / "evaluation_predictions.csv"
+    csv_path.unlink()
+    at = _run(MODE_EVAL)
+    assert at.error
+    df.to_csv(csv_path, index=False)
+
+    at.button[0].click().run()
+
+    assert not at.exception
+    assert not at.error
+    assert any(m.label.startswith("MAE дня") for m in at.metric)
+
+
+@pytest.mark.parametrize("column", ["power_pred", "power_baseline"])
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), "bad-number"])
+def test_evaluation_rejects_invalid_predictions(evaluation_files, column, value):
+    directory, df, _ = evaluation_files
+    df[column] = df[column].astype(object)
+    df.loc[0, column] = value
+    df.to_csv(directory / "evaluation_predictions.csv", index=False)
+
+    at = _run(MODE_EVAL)
+
+    assert any(column in e.value for e in at.error)
+    assert not at.metric, "битый прогноз не должен молча исключаться из MAE"
+
+
+@pytest.mark.parametrize("column,value", [
+    ("target_eligible", "unknown"), ("datetime", "not-a-date"),
+])
+def test_evaluation_rejects_invalid_column_types(evaluation_files, column, value):
+    directory, df, _ = evaluation_files
+    df[column] = df[column].astype(object)
+    df.loc[0, column] = value
+    df.to_csv(directory / "evaluation_predictions.csv", index=False)
+
+    at = _run(MODE_EVAL)
+
+    assert any(column in e.value for e in at.error)
+    assert not at.metric
+
+
+@pytest.mark.parametrize("report", [[], {"periods": []}, {"periods": {"evaluate": ["bad"]}}])
+def test_evaluation_rejects_malformed_report(evaluation_files, report):
+    directory, _, _ = evaluation_files
+    (directory / "evaluation_report.json").write_text(json.dumps(report))
+
+    at = _run(MODE_EVAL)
+
+    assert any("evaluation_report.json" in e.value for e in at.error)
+    assert not at.metric
+
+
+def test_evaluation_keeps_missing_truth_and_intervals(evaluation_files):
+    at = _run(MODE_EVAL)
+    shown = {m.label: m.value for m in at.metric}
+    assert shown["Часов с фактом"] == "2 из 3"
+    assert next(v for k, v in shown.items() if k.startswith("MAE дня")) == "0.050"
+    assert any("1 без наблюдений" in c.value for c in at.caption)
+    assert any("полоса не показана" in c.value for c in at.caption)
+
+
+@pytest.mark.parametrize("period,expected_date", [
+    (["2026-01-01", "2026-01-03"], "2026-01-03"),
+    (["2026-01-20", "2026-01-22"], "2026-01-20"),
+])
+def test_evaluation_default_date_fits_custom_window(evaluation_files, period, expected_date):
+    directory, df, report = evaluation_files
+    report["periods"]["evaluate"] = period
+    df["datetime"] = pd.date_range(expected_date, periods=len(df), freq="h")
+    df["issue_date"] = str((pd.Timestamp(expected_date) - pd.Timedelta(days=1)).date())
+    df.to_csv(directory / "evaluation_predictions.csv", index=False)
+    (directory / "evaluation_report.json").write_text(json.dumps(report))
+
+    at = _run(MODE_EVAL)
+
+    assert at.date_input(key="eval_date").value == pd.Timestamp(expected_date).date()
+    assert next(m.value for m in at.metric if m.label.startswith("MAE дня")) == "0.050"

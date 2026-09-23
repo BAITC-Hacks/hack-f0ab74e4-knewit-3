@@ -25,8 +25,9 @@ COPY . .
 
 # Проверка комплекта при сборке, без сети: сохранённые модели читаются установленным
 # sklearn без предупреждения о несовместимой версии, каноническая подача цела.
-RUN python -W "error::sklearn.exceptions.InconsistentVersionWarning" \
-      -c "from src.models.predict import load_model; load_model(1); load_model(2)" \
+RUN python -c "import warnings; from sklearn.exceptions import InconsistentVersionWarning; \
+      warnings.simplefilter('error', InconsistentVersionWarning); \
+      from src.models.predict import load_model; load_model(1); load_model(2)" \
     && python -m scripts.verify_submission
 
 EXPOSE 8501

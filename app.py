@@ -12,6 +12,7 @@ import shlex
 from datetime import date, timedelta
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -86,7 +87,7 @@ def _evaluation_data(directory: str) -> tuple[pd.DataFrame | None, dict | None, 
             f"Создать: `python -m src.backtest.evaluate --output-dir {shlex.quote(str(base))}` "
             f"или укажите другой каталог через `--evaluation-dir`.")
     try:
-        df = pd.read_csv(csv_path, parse_dates=["datetime"])
+        df = pd.read_csv(csv_path)
         report = json.loads(json_path.read_text())
     except Exception as exc:
         return None, None, f"Файлы оценки в `{base}` не читаются: {exc}"
@@ -96,6 +97,39 @@ def _evaluation_data(directory: str) -> tuple[pd.DataFrame | None, dict | None, 
                             f"нет колонок {sorted(missing)}.")
     if df.empty:
         return None, None, f"`{csv_path.name}` пуст — оценивать нечего."
+
+    try:
+        if not isinstance(report, dict) or not isinstance(report.get("periods", {}), dict):
+            raise ValueError("отчёт и periods должны быть JSON-объектами")
+        period = report.get("periods", {}).get("evaluate", ["2025-12-01", "2026-01-31"])
+        if not isinstance(period, list) or len(period) != 2:
+            raise ValueError("periods.evaluate должен содержать две даты YYYY-MM-DD")
+        ev_lo, ev_hi = (date.fromisoformat(value) for value in period)
+        if ev_lo > ev_hi:
+            raise ValueError("начало periods.evaluate позже окончания")
+    except (TypeError, ValueError) as exc:
+        return None, None, f"Некорректный `{json_path.name}`: {exc}"
+
+    try:
+        df["datetime"] = pd.to_datetime(df["datetime"], format="ISO8601", errors="raise")
+        if df["datetime"].isna().any() or df["datetime"].dt.tz is not None:
+            raise ValueError("нужны целевые часы без пропусков в локальном времени")
+    except (TypeError, ValueError) as exc:
+        return None, None, f"Некорректная колонка `datetime` в `{csv_path.name}`: {exc}"
+    if not pd.api.types.is_bool_dtype(df["target_eligible"].dtype):
+        return None, None, (f"Некорректная колонка `target_eligible` в `{csv_path.name}`: "
+                            "ожидаются только True или False без пропусков.")
+    for column in ("power_pred", "power_baseline", "power_true", "power_p10", "power_p90"):
+        try:
+            df[column] = pd.to_numeric(df[column], errors="raise")
+            values = df[column].to_numpy(dtype=float)
+            invalid = ~np.isfinite(values)
+            if column not in ("power_pred", "power_baseline"):
+                invalid &= ~np.isnan(values)  # отсутствие факта/интервала разрешено
+            if invalid.any():
+                raise ValueError(f"{int(invalid.sum())} значений NaN/∞ недопустимы")
+        except (TypeError, ValueError) as exc:
+            return None, None, f"Некорректная колонка `{column}` в `{csv_path.name}`: {exc}"
     return df, report, None
 
 
@@ -308,7 +342,7 @@ with st.sidebar:
                     f"0–24 ч `{rep['by_lead']['1']['mae']:.4f}` · "
                     f"24–48 ч `{rep['by_lead']['2']['mae']:.4f}`")
         st.caption("Метрики настройки (early stopping, бленд), не независимая оценка.")
-    st.button("Обновить результаты")
+    st.button("Обновить результаты", on_click=st.cache_data.clear)
 
 # ================================================================ режим оценки
 if eval_mode:
@@ -358,9 +392,10 @@ if eval_mode:
         lead = st.radio("Горизонт", [1, 2], key="eval_lead", horizontal=True,
                         format_func=lambda l: f"{(l - 1) * 24}–{l * 24} ч (lead {l})")
     with csel2:
-        day = st.date_input("Целевая дата", value=date(2026, 1, 14), key="eval_date",
-                            min_value=date.fromisoformat(ev_lo),
-                            max_value=date.fromisoformat(ev_hi))
+        min_day, max_day = date.fromisoformat(ev_lo), date.fromisoformat(ev_hi)
+        default_day = min(max(date(2026, 1, 14), min_day), max_day)
+        day = st.date_input("Целевая дата", value=default_day, key="eval_date",
+                            min_value=min_day, max_value=max_day)
 
     day_rows = eval_df[(eval_df["turbine"] == turbine)
                        & (eval_df["lead_day"] == lead)

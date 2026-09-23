@@ -102,6 +102,8 @@ def sandbox(tmp_path, monkeypatch):
     monkeypatch.setattr(rep, "FORECASTS", forecasts)
     monkeypatch.setattr(rep, "EVALUATION_DIR", artifacts / "evaluation")
     monkeypatch.setattr(rep, "MANIFEST", artifacts / "manifest.json")
+    monkeypatch.setattr(rep, "DEFAULT_START", START.isoformat())
+    monkeypatch.setattr(rep, "DEFAULT_END", END.isoformat())
     snapshot = rep.snapshot_canonical()
     manifest = {"input_sha256": {k: v for k, v in snapshot.items() if k.startswith("data/")},
                 "output_sha256": {k: v for k, v in snapshot.items()
@@ -189,6 +191,23 @@ def test_output_dir_outside_repo_is_allowed(sandbox, tmp_path):
     code = rep.main(["--output-dir", str(tmp_path / "elsewhere" / "run"),
                      "--start", START.isoformat(), "--end", END.isoformat()])
     assert code == 0
+
+
+@pytest.mark.parametrize("tolerance", ["inf", "-inf", "nan", "-1"])
+def test_invalid_tolerance_is_refused_before_output_creation(sandbox, tolerance):
+    out = sandbox / "runs" / "invalid-tolerance"
+    code = rep.main(["--output-dir", str(out), f"--tolerance={tolerance}"])
+    assert code == 2
+    assert not out.exists()
+
+
+def test_partial_release_window_is_refused_before_output_creation(sandbox, capsys):
+    out = sandbox / "runs" / "partial"
+    code = rep.main(["--output-dir", str(out), "--start", END.isoformat(),
+                     "--end", END.isoformat()])
+    assert code == 2
+    assert not out.exists()
+    assert "--start" in capsys.readouterr().out
 
 
 # ------------------------------------------------------------------ значимые отказы
@@ -308,6 +327,27 @@ def test_manifest_mismatch_is_reported(sandbox):
     assert json.loads((out / rep.REPORT_NAME).read_text())["failed_checks"] == ["manifest"]
 
 
+@pytest.mark.parametrize("manifest", ["{}", "[]", "{", '{"input_sha256": {}, "output_sha256": {}}'])
+def test_malformed_manifest_fails_with_report(sandbox, manifest):
+    rep.MANIFEST.write_text(manifest)
+    code, out = run(sandbox)
+    assert code == 1
+    report = json.loads((out / rep.REPORT_NAME).read_text())
+    assert "manifest" in report["failed_checks"]
+    assert report["checks"]["manifest"]["error"]
+
+
+def test_unlisted_canonical_file_fails_manifest_check(sandbox):
+    manifest = json.loads(rep.MANIFEST.read_text())
+    del manifest["output_sha256"]["models_artifacts/turbine_1.pkl"]
+    rep.MANIFEST.write_text(json.dumps(manifest))
+    code, out = run(sandbox)
+    assert code == 1
+    report = json.loads((out / rep.REPORT_NAME).read_text())
+    assert report["failed_checks"] == ["manifest"]
+    assert "models_artifacts/turbine_1.pkl" in report["checks"]["manifest"]["unlisted"]
+
+
 def test_metric_tree_comparison_rules():
     saved = {"rows": {"total": 5}, "a": {"mae": 0.5, "n": 3}, "flag": True}
     same = {"rows": {"total": 5}, "a": {"mae": 0.5 + 1e-12, "n": 3}, "flag": True}
@@ -333,6 +373,23 @@ def test_replay_mismatch_is_detected(monkeypatch, tmp_path):
     monkeypatch.setattr(evaluate, "_replay", lambda weather, directory: (saved.iloc[1:], [{"issue_date": "x", "reason": "пусто"}]))
     result = rep.replay_evaluation(tmp_path, "weather", 1e-9)
     assert result["problems"] and result["rows_replayed"] == 7
+
+
+@pytest.mark.parametrize("duplicate_side", ["saved", "replayed"])
+def test_replay_duplicate_keys_are_rejected(monkeypatch, tmp_path, duplicate_side):
+    from src.backtest import evaluate
+    write_evaluation_set(tmp_path)
+    saved = pd.read_csv(tmp_path / evaluate.CSV_NAME)
+    duplicated = pd.concat([saved, saved.iloc[[0]]], ignore_index=True)
+    if duplicate_side == "saved":
+        duplicated.to_csv(tmp_path / evaluate.CSV_NAME, index=False)
+        replayed = saved
+    else:
+        replayed = duplicated
+    monkeypatch.setattr(evaluate, "_replay", lambda weather, directory: (replayed, []))
+    result = rep.replay_evaluation(tmp_path, "weather", 1e-9)
+    assert result["problems"]
+    assert any("дубл" in problem for problem in result["problems"])
 
 
 def test_real_cache_check_lists_every_required_file(monkeypatch, tmp_path):

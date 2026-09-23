@@ -33,6 +33,7 @@ jobs:
           python -c "import lightgbm, sklearn, streamlit; print(lightgbm.__version__, sklearn.__version__, streamlit.__version__)"
 
       - name: Полный pytest (Streamlit-тесты обязаны выполняться, а не пропускаться)
+        shell: bash  # включает pipefail: tee не должен скрывать код отказа pytest
         run: |
           python -m pytest tests/ -q -rs -p no:cacheprovider | tee pytest.log
           if grep -Eq "^[0-9]+ (passed|failed).*skipped|SKIPPED" pytest.log; then
@@ -43,13 +44,10 @@ jobs:
       - name: Целостность сохранённой подачи
         run: python -m scripts.verify_submission
 
-      # Допуск 0.05 задан явно: канонические числа получены на macOS, а glibc даёт
-      # 1 ulp разницы в sin/cos признаков и переключает часть порогов LightGBM
-      # (измерено: max 2.65e-2 на прогнозах, 3.14e-2 на P10 оценки; ~4% строк).
-      # Метрики оценки сверяются строго независимо от этого допуска. После округления
-      # тригонометрических признаков и переобучения флаг убрать — docs/REPRODUCIBILITY.md §6.
+      # Общий допуск 1e-9 для macOS и Linux: признаки округлены перед обучением
+      # и предсказанием, комплект моделей пересобран (docs/REPRODUCIBILITY.md §6).
       - name: Offline-репетиция сохранённым комплектом (сеть заблокирована в процессе)
-        run: python -m scripts.reproduce --output-dir runs/reproduction --tolerance 0.05
+        run: python -m scripts.reproduce --output-dir runs/reproduction
 
       - name: Сколько строк совпало точнее 1e-9
         if: always()
@@ -82,11 +80,11 @@ jobs:
       - name: Сборка образа
         run: docker build -t windcast:ci .
 
-      # Тот же явный допуск 0.05, что и в задании linux (glibc против macOS; §6 документа)
+      # Тот же строгий допуск 1e-9, что и в задании linux.
       - name: Offline-репетиция внутри контейнера
         run: |
           docker run --rm --network none windcast:ci \
-            python -m scripts.reproduce --output-dir /tmp/reproduction --tolerance 0.05
+            python -m scripts.reproduce --output-dir /tmp/reproduction
 
       - name: Панель Streamlit поднимается и отвечает на /_stcore/health
         run: |

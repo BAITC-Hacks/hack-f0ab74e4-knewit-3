@@ -66,6 +66,11 @@ def main() -> None:
                 & (df["datetime"] >= lo) & (df["datetime"] < hi)]
     if window.empty:
         raise SystemExit(f"В оценке нет строк lead {args.lead} за {args.start} +{args.days}д.")
+    missing_turbines = [t for t in TURBINES if t not in window["turbine"].unique()]
+    if missing_turbines:
+        missing = ", ".join(map(str, missing_turbines))
+        raise SystemExit(f"В выбранном окне оценки нет строк для турбин: {missing}. "
+                         "Для графика нужны обе турбины.")
 
     fig, axes = plt.subplots(2, 1, figsize=(11, 6), sharex=True)
     fig.patch.set_facecolor("white")
