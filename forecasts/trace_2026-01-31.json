@@ -1,6 +1,6 @@
 {
  "issue_date": "2026-01-31",
- "mode": "no-llm",
+ "mode": "openai",
  "completed": true,
  "next_tool": null,
  "validation_ok": true,
@@ -12,7 +12,7 @@
    "node": "fetch_weather",
    "label": "Получение архивного прогноза погоды",
    "status": "ok",
-   "ms": 2.6,
+   "ms": 14.5,
    "output": {
     "issue_date": "2026-01-31",
     "hours": 48,
@@ -38,7 +38,7 @@
    "node": "prepare_features",
    "label": "Подготовка признаков",
    "status": "ok",
-   "ms": 7.8,
+   "ms": 26.3,
    "output": {
     "rows": 48,
     "n_features": 108,
@@ -51,7 +51,7 @@
    "node": "run_model",
    "label": "Запуск моделей обеих турбин",
    "status": "ok",
-   "ms": 46.2,
+   "ms": 799.2,
    "output": {
     "turbine_1": {
      "mean": 0.317,
@@ -73,7 +73,7 @@
    "node": "validate_forecast",
    "label": "Физическая валидация прогноза",
    "status": "ok",
-   "ms": 0.2,
+   "ms": 1.1,
    "output": {
     "ok": true,
     "checks": {
@@ -100,7 +100,7 @@
    "node": "compare_with_previous",
    "label": "Сравнение с прошлым запуском",
    "status": "ok",
-   "ms": 0.0,
+   "ms": 0.5,
    "output": {
     "turbine_1": "нет предыдущего запуска",
     "turbine_2": "нет предыдущего запуска"
@@ -112,7 +112,7 @@
    "node": "write_outputs",
    "label": "Запись прогноза и отчёта",
    "status": "ok",
-   "ms": 3.3,
+   "ms": 15.9,
    "output": {
     "files": [
      "forecast_t1_2026-01-31.csv",
