@@ -1,11 +1,17 @@
-"""Историческая иллюстрация для README: python -m scripts.plot_holdout.
+"""График для README из сохранённой ретроспективной оценки.
 
-Финальные модели обучены на показанных январских датах. График иллюстрирует подгонку;
-его нельзя использовать как независимую оценку точности. Оценочный график будет
-строиться по сохранённым прогнозам после интеграции нового протокола.
+    python -m scripts.plot_holdout [--evaluation-dir models_artifacts/evaluation]
+                                   [--lead 1] [--start 2026-01-12] [--days 7]
+
+Читает evaluation_predictions.csv — прогнозы модели, обученной строго до оценочного
+периода (см. docs/EVALUATION.md). Финальная модель здесь не пересчитывается.
+Каждый показанный день — отдельный выпуск: сегменты рисуются с разрывом на границе
+выпусков, чтобы разные выпуски не выглядели одной непрерывной серией.
 """
 from __future__ import annotations
 
+import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -14,42 +20,82 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 
-from src.config import TEST_END, TRAIN_START, TURBINES
-from src.features.build import build_features
-from src.features.dataset import load_hourly
-from src.models.predict import predict
-from src.weather.openmeteo import get_weather
+from src.config import TURBINES
 
-WEEK = ("2026-01-12", "2026-01-19")
-INK, BLUE, MUTED = "#3f3f46", "#2563eb", "#9ca3af"
+INK, BLUE, GREY, BAND = "#3f3f46", "#2563eb", "#9ca3af", "#2563eb22"
+OUT = Path("docs/img/holdout_week.png")
 
-weather = get_weather(TRAIN_START, TEST_END)
-lead = 1
-cols = {c: c.replace(f"__d{lead}", "") for c in weather.columns if c.endswith(f"__d{lead}")}
-sl = weather[list(cols)].rename(columns=cols)
-sl["lead_day"] = lead
-X = build_features(sl)
 
-fig, axes = plt.subplots(2, 1, figsize=(11, 6), sharex=True)
-fig.patch.set_facecolor("white")
-for ax, t in zip(axes, TURBINES):
-    actual = load_hourly(t)["power"].loc[WEEK[0]:WEEK[1]]
-    pred = predict(t, X.loc[WEEK[0]:WEEK[1]])["power_pred"]
-    ax.plot(actual.index, actual.values, color=INK, lw=1.6, label="Факт")
-    ax.plot(pred.index, pred.values, color=BLUE, lw=1.6, label="Расчёт финальной модели")
-    ax.set_ylim(0, 1.05)
-    ax.set_ylabel(f"Турбина {t}\nнорм. мощность", fontsize=9)
-    ax.grid(True, color="#e5e7eb", lw=0.6)
-    for s in ("top", "right"):
-        ax.spines[s].set_visible(False)
-    ax.tick_params(colors=MUTED, labelsize=8)
-axes[0].legend(loc="upper right", frameon=False, fontsize=9)
-axes[0].set_title("Расчёт на обучающих датах и факт: 12–19 января 2026 (не независимый тест)",
-                  fontsize=11, color=INK, loc="left")
-plt.tight_layout()
-out = Path("docs/img/holdout_week.png")
-out.parent.mkdir(parents=True, exist_ok=True)
-plt.savefig(out, dpi=150)
-print(f"сохранено: {out}")
+def _with_issue_gaps(rows: pd.DataFrame) -> pd.DataFrame:
+    """NaN-строка между выпусками: линия рвётся на границе, а не мостится через неё."""
+    parts = []
+    for _, grp in rows.groupby("issue_date", sort=True):
+        parts.append(grp.sort_values("datetime"))
+        gap = grp.iloc[-1:].copy()
+        gap["datetime"] = gap["datetime"] + pd.Timedelta(minutes=30)
+        for col in ("power_true", "power_pred", "power_baseline", "power_p10", "power_p90"):
+            gap[col] = np.nan
+        parts.append(gap)
+    return pd.concat(parts, ignore_index=True)
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--evaluation-dir", type=Path, default=Path("models_artifacts/evaluation"))
+    ap.add_argument("--lead", type=int, choices=(1, 2), default=1)
+    ap.add_argument("--start", default="2026-01-12")
+    ap.add_argument("--days", type=int, default=7)
+    args = ap.parse_args()
+
+    csv_path = args.evaluation_dir / "evaluation_predictions.csv"
+    report_path = args.evaluation_dir / "evaluation_report.json"
+    if not csv_path.is_file():
+        raise SystemExit(f"Нет {csv_path}. Сначала: python -m src.backtest.evaluate "
+                         f"--output-dir {args.evaluation_dir}")
+    df = pd.read_csv(csv_path, parse_dates=["datetime"])
+    trained_through = "?"
+    if report_path.is_file():
+        trained_through = json.loads(report_path.read_text()).get("trained_through", "?")
+
+    lo = pd.Timestamp(args.start)
+    hi = lo + pd.Timedelta(days=args.days)
+    window = df[(df["lead_day"] == args.lead)
+                & (df["datetime"] >= lo) & (df["datetime"] < hi)]
+    if window.empty:
+        raise SystemExit(f"В оценке нет строк lead {args.lead} за {args.start} +{args.days}д.")
+
+    fig, axes = plt.subplots(2, 1, figsize=(11, 6), sharex=True)
+    fig.patch.set_facecolor("white")
+    for ax, t in zip(axes, TURBINES):
+        rows = _with_issue_gaps(window[window["turbine"] == t])
+        x = rows["datetime"]
+        if rows["power_p10"].notna().any():
+            ax.fill_between(x, rows["power_p10"], rows["power_p90"],
+                            color=BAND, linewidth=0, label="P10–P90")
+        ax.plot(x, rows["power_true"], color=INK, lw=1.6, label="Факт")
+        ax.plot(x, rows["power_pred"], color=BLUE, lw=1.6,
+                label="Прогноз (сохранённая оценка)")
+        ax.set_ylim(0, 1.05)
+        ax.set_ylabel(f"Турбина {t}\nнорм. мощность", fontsize=9)
+        ax.grid(True, color="#e5e7eb", lw=0.6)
+        for s in ("top", "right"):
+            ax.spines[s].set_visible(False)
+        ax.tick_params(colors=GREY, labelsize=8)
+    axes[0].legend(loc="upper right", frameon=False, fontsize=9)
+    end = (hi - pd.Timedelta(days=1)).date()
+    axes[0].set_title(
+        f"Ретроспективная оценка, lead {args.lead} (выпуск за {args.lead} дн. до цели): "
+        f"{lo.date()} – {end}\nМодель обучена по {trained_through}; "
+        f"разрывы линий — границы отдельных выпусков",
+        fontsize=10.5, color=INK, loc="left")
+    plt.tight_layout()
+    OUT.parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(OUT, dpi=150)
+    print(f"сохранено: {OUT}")
+
+
+if __name__ == "__main__":
+    main()
