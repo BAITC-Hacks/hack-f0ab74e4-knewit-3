@@ -1,5 +1,12 @@
-"""Инференс: прогноз нормализованной мощности по фичам архивного прогноза погоды."""
+"""Инференс: прогноз нормализованной мощности по фичам архивного прогноза погоды.
+
+artifacts_dir позволяет читать альтернативный набор артефактов (например, модель
+ретроспективной оценки с более ранней отсечкой обучения) тем же продовым путём;
+по умолчанию — канонические артефакты сдачи.
+"""
 from __future__ import annotations
+
+from pathlib import Path
 
 import pickle
 
@@ -9,13 +16,15 @@ import pandas as pd
 from src.config import ARTIFACTS
 
 
-def load_model(turbine: int) -> dict:
-    with open(ARTIFACTS / f"turbine_{turbine}.pkl", "rb") as f:
+def load_model(turbine: int, artifacts_dir: Path | str | None = None) -> dict:
+    directory = Path(artifacts_dir or ARTIFACTS)
+    with open(directory / f"turbine_{turbine}.pkl", "rb") as f:
         return pickle.load(f)
 
 
-def predict(turbine: int, features: pd.DataFrame) -> pd.DataFrame:
-    art = load_model(turbine)
+def predict(turbine: int, features: pd.DataFrame,
+            artifacts_dir: Path | str | None = None) -> pd.DataFrame:
+    art = load_model(turbine, artifacts_dir)
     X = features.reindex(columns=art["features"])
     lgb_p = np.clip(np.mean([m.predict(X) for m in art["lgbs"]], axis=0), 0, 1)
     iso_p = art["iso"].predict(X["ens_ws_mean"])
