@@ -1,4 +1,5 @@
 services:
+  # Панель оператора: docker compose up --build → http://localhost:8501
   windcast:
     build: .
     image: windcast:latest
@@ -9,5 +10,20 @@ services:
       - path: .env
         required: false
     volumes:
-      # Прогнозы и отчёты видны на хосте, а не запираются в контейнере
-      - ./forecasts:/app/forecasts
+      # Канонические прогнозы хоста видны панели, но контейнер не может их изменить
+      - ./forecasts:/app/forecasts:ro
+
+  # Offline-репетиция релиза без сети: docker compose run --rm reproduce
+  # Результат — ./runs/reproduction-docker на хосте; каталог должен быть пустым или новым.
+  # Допуск 0.05 задан явно: канонические числа получены на macOS, glibc в контейнере даёт
+  # 1 ulp разницы в sin/cos признаков и переключает часть порогов LightGBM
+  # (docs/REPRODUCIBILITY.md §6). Метрики оценки сверяются строго независимо от допуска.
+  reproduce:
+    image: windcast:latest
+    build: .
+    profiles: ["check"]
+    network_mode: none
+    volumes:
+      - ./runs:/app/runs
+    command: ["python", "-m", "scripts.reproduce", "--output-dir", "/app/runs/reproduction-docker",
+              "--tolerance", "0.05"]

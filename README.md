@@ -371,14 +371,30 @@ streamlit run app.py -- --forecast-dir runs/judge-check
 <summary><b>Docker</b></summary>
 
 ```bash
-docker compose up --build            # обучает модели при сборке, панель на http://localhost:8501
-docker compose run --rm windcast sh -c \
-  'python -m src.cli run-agent --start 2026-01-31 --end 2026-02-27 --no-llm --output-dir /tmp/judge-check \
-   && python -m scripts.verify_submission --directory /tmp/judge-check'
+docker compose up --build            # панель на http://localhost:8501
+docker compose run --rm reproduce    # отдельный прогон без сети
 ```
 
-Каталог `forecasts/` подключён с хоста. Контейнерная репетиция из чистого клона в Linux — отдельная
-проверка ([статус](#-статус-проекта)).
+Образ включает сохранённые модели и прогнозы; обучения при сборке нет. Каталог
+`forecasts/` подключён с хоста только для чтения. Проверка пишет результаты в новый
+`runs/reproduction-docker/` и завершается ошибкой при несовпадении с эталоном.
+
+</details>
+
+<details>
+<summary><b>Воспроизводимость и CI</b></summary>
+
+```bash
+python -m scripts.reproduce --output-dir runs/reproduction
+```
+
+Команда проверяет хэши входов и артефактов, полноту кэша, все 28 выпусков, подачу
+и replay оценочных моделей; сеть в процессе заблокирована. Каталог должен быть новым
+или пустым. Подробности — [REPRODUCIBILITY](docs/REPRODUCIBILITY.md).
+
+Workflow проверяет Linux и контейнер. Первые задания ветки релиза не получили раннер
+из-за блокировки биллинга организации GitHub; состояние CI и локальные доказательства
+приведены в [журнале проверки](docs/REPRODUCIBILITY.md#3-github-actions-githubworkflowsreproducibilityyml).
 
 </details>
 

@@ -1,8 +1,19 @@
+# В образ не попадают история git, секреты, IDE, локальные окружения, собственные
+# прогоны и кэши тестов. Данные, кэш погоды, модели и канонические прогнозы нужны
+# для offline-работы и остаются.
 .git
+.github
+.gitignore
+.env
+.env.*
+!.env.example
+.idea
+.vscode
 .venv
+venv
+runs
 __pycache__
 *.pyc
 .pytest_cache
-.env
+.DS_Store
 docs/img
-models_artifacts

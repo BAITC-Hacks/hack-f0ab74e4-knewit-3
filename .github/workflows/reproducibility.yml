@@ -1,0 +1,101 @@
+# Воспроизводимость на Linux: тесты, целостность подачи, offline-репетиция сохранённым
+# комплектом и контейнерный прогон без сети. Ключи API не нужны; обучение не выполняется.
+name: reproducibility
+
+on:
+  push:
+    branches: ["main", "dev/**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    name: Linux · Python 3.12 · тесты и offline-репетиция
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Установка закреплённых зависимостей
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -c "import lightgbm, sklearn, streamlit; print(lightgbm.__version__, sklearn.__version__, streamlit.__version__)"
+
+      - name: Полный pytest (Streamlit-тесты обязаны выполняться, а не пропускаться)
+        run: |
+          python -m pytest tests/ -q -rs -p no:cacheprovider | tee pytest.log
+          if grep -Eq "^[0-9]+ (passed|failed).*skipped|SKIPPED" pytest.log; then
+            echo "::error::в наборе есть пропущенные тесты — зависимости установлены не полностью"
+            exit 1
+          fi
+
+      - name: Целостность сохранённой подачи
+        run: python -m scripts.verify_submission
+
+      # Допуск 0.05 задан явно: канонические числа получены на macOS, а glibc даёт
+      # 1 ulp разницы в sin/cos признаков и переключает часть порогов LightGBM
+      # (измерено: max 2.65e-2 на прогнозах, 3.14e-2 на P10 оценки; ~4% строк).
+      # Метрики оценки сверяются строго независимо от этого допуска. После округления
+      # тригонометрических признаков и переобучения флаг убрать — docs/REPRODUCIBILITY.md §6.
+      - name: Offline-репетиция сохранённым комплектом (сеть заблокирована в процессе)
+        run: python -m scripts.reproduce --output-dir runs/reproduction --tolerance 0.05
+
+      - name: Сколько строк совпало точнее 1e-9
+        if: always()
+        run: |
+          python - <<'EOF'
+          import json, pathlib
+          path = pathlib.Path("runs/reproduction/reproduction_report.json")
+          if path.is_file():
+              report = json.loads(path.read_text())
+              for name in ("forecast_match", "evaluation_replay"):
+                  check = report["checks"].get(name, {})
+                  print(name, {k: check.get(k) for k in ("ok", "worst_abs_deviation", "submission_rows_beyond_exact", "submission_rows", "rows_beyond_exact", "rows_saved") if k in check})
+          EOF
+
+      - name: Отчёт репетиции
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reproduction-report-linux
+          path: runs/reproduction/reproduction_report.json
+          if-no-files-found: ignore
+
+  docker:
+    name: Docker · сборка без обучения · прогон с --network none · панель
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Сборка образа
+        run: docker build -t windcast:ci .
+
+      # Тот же явный допуск 0.05, что и в задании linux (glibc против macOS; §6 документа)
+      - name: Offline-репетиция внутри контейнера
+        run: |
+          docker run --rm --network none windcast:ci \
+            python -m scripts.reproduce --output-dir /tmp/reproduction --tolerance 0.05
+
+      - name: Панель Streamlit поднимается и отвечает на /_stcore/health
+        run: |
+          docker run -d --name windcast-ui -p 8501:8501 windcast:ci
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8501/_stcore/health; then echo; echo "панель готова"; break; fi
+            if [ "$i" -eq 30 ]; then docker logs windcast-ui; echo "::error::панель не поднялась"; exit 1; fi
+            sleep 2
+          done
+          curl -sf -o /dev/null -w "HTTP %{http_code}\n" http://127.0.0.1:8501/
+          docker inspect --format '{{.State.Health.Status}}' windcast-ui || true
+          docker stop windcast-ui >/dev/null
