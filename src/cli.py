@@ -74,10 +74,34 @@ def cmd_check_tz(_args) -> None:
         print(f"Турбина {t}: лучший лаг {best} (corr={corrs[best]:.3f}) — {status}")
 
 
+def cmd_list_models(_args) -> None:
+    """Какие модели доступны по ключу из .env — чтобы выбрать LLM_MODEL по факту."""
+    import os
+
+    import httpx
+
+    key = os.environ.get("LLM_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    if not key:
+        print("Нет LLM_API_KEY в .env — заполните по образцу .env.example")
+        return
+    base = os.environ.get("LLM_BASE_URL", "https://api.openai.com/v1").rstrip("/")
+    r = httpx.get(f"{base}/models", headers={"Authorization": f"Bearer {key}"}, timeout=60)
+    r.raise_for_status()
+    names = sorted(m["id"] for m in r.json().get("data", []))
+    chat = [n for n in names if not any(x in n for x in
+            ("embed", "tts", "whisper", "dall-e", "image", "moderation", "audio", "realtime"))]
+    print(f"Доступно моделей: {len(names)}, из них пригодны для агента:\n")
+    for n in chat:
+        print(" ", n)
+    print("\nВыбранную подставьте в LLM_MODEL в .env и проверьте одним днём:\n"
+          "  python -m src.cli run-agent --start 2026-02-10 --end 2026-02-10")
+
+
 def main() -> None:
     p = argparse.ArgumentParser(prog="windcast")
     sub = p.add_subparsers(required=True)
     sub.add_parser("train").set_defaults(func=cmd_train)
+    sub.add_parser("list-models").set_defaults(func=cmd_list_models)
     ra = sub.add_parser("run-agent")
     ra.add_argument("--start", required=True)
     ra.add_argument("--end", required=True)

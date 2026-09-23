@@ -89,6 +89,8 @@ def run_day_llm(issue_date: str, weather: pd.DataFrame) -> dict:
     backend = pick_backend()
     if backend == "none":
         return run_day_no_llm(issue_date, weather)
+    model = os.environ.get("LLM_MODEL", "по умолчанию")
+    print(f"  [{issue_date}] LLM: {backend} / {model}")
 
     ctx = T.DayContext(issue_date, weather)
     result: dict | None = None
