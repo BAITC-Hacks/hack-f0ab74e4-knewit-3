@@ -12,7 +12,7 @@
                                │ tool calls
    ┌───────────────┬───────────┼──────────────┬────────────────┐
    ▼               ▼           ▼              ▼                ▼
-fetch_weather  prepareـ    run_model    validate_forecast  analyze_report
+fetch_weather  prepare_    run_model    validate_forecast  analyze_report
 (Open-Meteo    features    (LightGBM    (физические        (сравнение с
  Previous      (матрица    per turbine   границы 0..1,      предыдущим
  Runs API,     фич на      + baseline    полнота 48 ч,      запуском, дрейф
