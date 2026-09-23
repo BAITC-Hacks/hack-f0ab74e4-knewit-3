@@ -1,244 +1,565 @@
-# WindCast Agent — Agentic AI прогноз выработки ВЭС
+<div align="center">
 
-Команда **KnewIT 3** · HackAlem AI 2026, кейс «Agentic AI для прогнозирования выработки ВЭС».
+# 🌬️ WindCast Agent
 
-Агентная система, которая для двух ветротурбин Шелекского коридора (Алматинская область)
-выполняет полный цикл: получает **архивные прогнозы погоды по схеме Previous Runs** → готовит данные → прогоняет ML-модель → формирует почасовой прогноз выработки
-на 24–48 часов → валидирует и анализирует результат → повторяет цикл для следующего
-дневного выпуска. Тестовый период: 1–28 февраля 2026, rolling-запуски с 31 января.
+### Agentic AI для почасового прогнозирования выработки ВЭС на 24–48 часов
 
-**Готовый результат:** [`forecasts/submission.csv`](forecasts/submission.csv) — почасовой
-прогноз обеих турбин на весь февраль 2026 (1344 строки, на каждый час — прогноз свежайшего
-доступного запуска), плюс прогнозы и отчёты 28 дневных запусков в [`forecasts/`](forecasts/).
+[![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](requirements.txt)
+[![LightGBM](https://img.shields.io/badge/LightGBM-4.7-2E8B57)](src/models/train.py)
+[![Open-Meteo](https://img.shields.io/badge/Open--Meteo-Previous%20Runs%20API-1D5FD6)](src/weather/openmeteo.py)
+[![LLM](https://img.shields.io/badge/LLM-OpenAI%20gpt--6--luna-412991?logo=openai&logoColor=white)](src/agent/llm.py)
+[![Tests](https://img.shields.io/badge/pytest-69%20passed-18734A)](tests/)
+[![Submission](https://img.shields.io/badge/submission-1344%20turbine--hours-1D5FD6)](forecasts/submission.csv)
+[![Docker](https://img.shields.io/badge/Docker-compose-2496ED?logo=docker&logoColor=white)](docker-compose.yml)
+
+**HackAlem AI 2026 · трек Energy · кейс «Agentic AI для прогнозирования выработки ВЭС» · команда KnewIT 3**
+
+[Проверка за 5 минут](#-судьям-проверка-за-5-минут) ·
+[Соответствие ТЗ](#-соответствие-тз-матрица-трассируемости) ·
+[По критериям оценки](#-по-критериям-оценки) ·
+[Результаты](#-результаты) ·
+[Архитектура](#️-архитектура) ·
+[Запуск](#-запуск) ·
+[Структура](#️-структура-репозитория) ·
+[Ограничения](#️-ограничения-честно) ·
+[Развитие](#-потенциал-развития-и-оригинальность)
+
+</div>
+
+---
+
+**WindCast Agent** — агентная система, которая для двух ветротурбин Шелекского ветрокоридора
+(Алматинская область; координаты из ТЗ) **самостоятельно выполняет полный цикл прогноза**:
+получает **архивный прогноз погоды, доступный на момент прогнозирования** (Open-Meteo *Previous Runs API*,
+5 центров NWP) → строит 108 признаков → прогоняет ансамбль LightGBM×5 с физической кривой мощности →
+формирует **почасовой прогноз на 24–48 часов** с интервалом P10–P90 → **валидирует и анализирует** результат →
+сравнивает с предыдущим выпуском и **повторяет цикл при поступлении нового прогноза погоды**.
+Тестовый период организаторов — **1–28 февраля 2026**, rolling-выпуски с 31 января.
+Оркестратор — LLM с типизированными инструментами (по умолчанию OpenAI `gpt-6-luna`); тот же граф
+исполняется детерминированно в режиме `--no-llm`, поэтому **проверка не требует наших API-ключей и сети**.
+
+<details>
+<summary><b>🇬🇧 English summary (for international judges)</b></summary>
+
+WindCast Agent is an agentic AI system that forecasts hourly power output of two wind turbines
+(Shelek wind corridor, Kazakhstan) 24–48 hours ahead. For every issue day it autonomously runs the full loop
+required by the brief: fetch **archived weather forecasts as they were available at issue time**
+(Open-Meteo Previous Runs API, 5 NWP centres — never observed weather or reanalysis) → build 108 features →
+run a LightGBM×5 ensemble blended with an isotonic power curve → produce an hourly 48-hour forecast with P10–P90
+bands → validate & analyse → compare with yesterday's issue → repeat for the next issue.
+The submission for 1–28 February 2026 (`forecasts/submission.csv`, 1344 turbine-hours) is produced by
+28 rolling issues from 31 Jan to 27 Feb. An LLM (OpenAI `gpt-6-luna` by default; Claude / NVIDIA NIM
+supported) orchestrates typed tools through a shared state graph; `--no-llm` executes the identical graph
+deterministically, so judges can reproduce everything offline without keys. Retrospective evaluation
+(models trained through 30 Nov 2025, evaluated Dec 2025–Jan 2026): MAE 0.157 (0–24 h) / 0.173 (24–48 h)
+of rated capacity, ~11 % better than the physical power-curve baseline and 2.3× better than persistence.
+February ground truth is held by the organisers; we make no claims about it.
+
+</details>
+
+## 📌 Статус проекта
+
+<!-- Обновлять при каждом изменении состояния. Столбец «Подтверждение» — файл или команда, а не слова. -->
+
+| Компонент | Статус | Подтверждение |
+| --- | --- | --- |
+| Подача за февраль 2026 (28 выпусков, 1344 строки) | ✅ готова | [`forecasts/submission.csv`](forecasts/submission.csv), `python -m scripts.verify_submission` |
+| Обучение моделей обеих турбин (LightGBM×5 + baseline + квантили) | ✅ готово | [`models_artifacts/`](models_artifacts/), [`train_report.json`](models_artifacts/train_report.json) |
+| Ретроспективная оценка ансамбля по протоколу replay | ✅ готова | [`models_artifacts/evaluation/`](models_artifacts/evaluation/), [`docs/EVALUATION.md`](docs/EVALUATION.md) |
+| Агентный граф: LLM и `--no-llm`, восстановление, трассы | ✅ готов | [`src/agent/graph.py`](src/agent/graph.py), [`tests/test_agent_graph.py`](tests/test_agent_graph.py) |
+| Панель оператора (Streamlit) | ✅ работает | `streamlit run app.py`, [`tests/test_app_smoke.py`](tests/test_app_smoke.py) |
+| Воспроизведение из чистого клона без сети | ✅ проверено командой | [`docs/INTEGRATION.md`](docs/INTEGRATION.md#чистый-клон), [`manifest.json`](models_artifacts/manifest.json) |
+| Тесты (`pytest tests/ -q`) | ✅ 69 passed | [`tests/`](tests/) |
+| Канонический прогон с реальным LLM (OpenAI GPT-6 Luna): 28/28 отчётов, `mode=openai`, `fallback=false` | ✅ выполнен | [`forecasts/trace_*.json`](forecasts/), [`forecasts/report_2026-02-10.md`](forecasts/report_2026-02-10.md) |
+| Контейнерная репетиция релиза в Linux (Docker из чистого клона) | 🔄 отдельная проверка | [`docs/NEXT_STEPS.md`](docs/NEXT_STEPS.md#2-репетиция-релиза-в-linux--следующая-задача-agent-2) |
+| Калибровка интервалов P10–P90 (покрытие 65 % при номинале 80 %) | 🔄 в работе | [`evaluation_report.json`](models_artifacts/evaluation/evaluation_report.json) |
+
+## ⚡ Судьям: проверка за 5 минут
+
+Всё нужное лежит в репозитории: данные организаторов, кэш всех погодных запросов, обученные модели,
+готовая подача (получена с реальным LLM-агентом, см. [статус](#-статус-проекта)). После установки
+зависимостей сеть и API-ключи **не нужны**: режим `--no-llm` даёт те же числа прогноза.
+
+```bash
+python3.12 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt                       # ~1–2 мин, единственный шаг с сетью
+
+# 1) Целостность готовой подачи: 1344 turbine-hours, границы [0,1], 48 ч на выпуск, свежайший выпуск на каждый час
+python -m scripts.verify_submission                   # ожидается: OK: 1344 turbine-hours
+
+# 2) Полный rolling-прогон агента за тестовый период в ОТДЕЛЬНЫЙ каталог (канонические файлы не трогаются)
+python -m src.cli run-agent --start 2026-01-31 --end 2026-02-27 --no-llm --output-dir runs/judge-check
+python -m scripts.verify_submission --directory runs/judge-check
+python -m scripts.compare_runs --a forecasts --b runs/judge-check   # ожидается совпадение чисел
+
+# 3) Тесты и панель оператора
+python -m pytest tests/ -q                            # ожидается: 69 passed
+streamlit run app.py -- --forecast-dir runs/judge-check              # http://localhost:8501
+```
+
+Что вы увидите: 28 строк `[2026-01-31] ok=True -> forecast_t1_..., forecast_t2_...`, затем сводный файл на 1344 строки.
+В панели — граф выполнения агента с временем каждого узла, почасовой прогноз с полосой P10–P90, разброс пяти
+NWP-источников, отчёт агента и структурированный журнал. Подробный маршрут: [`docs/JUDGE_GUIDE.md`](docs/JUDGE_GUIDE.md).
+
+<details>
+<summary><b>🔍 Один день цикла под лупой (демо-сценарий)</b></summary>
+
+```bash
+python -m src.cli run-agent --start 2026-02-10 --end 2026-02-10 --no-llm --output-dir runs/demo
+cat runs/demo/report_2026-02-10.md
+python -c "import json;t=json.load(open('runs/demo/trace_2026-02-10.json'));print([(s['node'],s['status'],round(s['ms'])) for s in t['trace']])"
+```
+
+Агент берёт архивный прогноз, доступный **10.02.2026** (lead 1 → 11.02, lead 2 → 12.02), строит 48 × 108 признаков,
+прогоняет модели обеих турбин, валидирует (границы, полнота, NaN, flatline), сравнивает с выпуском 09.02
+(дрейф входа: `mean_abs_update`, `significant_update`) и пишет CSV + отчёт + трассу. Эталонная трасса этого дня из
+канонического прогона: [`forecasts/trace_2026-02-10.json`](forecasts/trace_2026-02-10.json) —
+шесть узлов, все `ok`, `mode=openai`, `completed=true`, `fallback=false`; отчёт написан GPT-6 Luna по результатам инструментов.
+
+</details>
+
+## ✅ Соответствие ТЗ: матрица трассируемости
+
+<!-- Каждое требование ТЗ (docs/CASE.md) → где реализовано → как проверить. Добавляя функцию, добавьте строку. -->
+
+| # | Требование ТЗ ([`docs/CASE.md`](docs/CASE.md)) | Где реализовано | Как убедиться |
+| --- | --- | --- | --- |
+| 1 | Построить на исторических данных модель прогнозирования почасовой выработки | [`src/features/dataset.py`](src/features/dataset.py) (агрегация SCADA к часу, фильтр простоев) · [`src/features/build.py`](src/features/build.py) (108 признаков) · [`src/models/train.py`](src/models/train.py) (LightGBM×5, изотонический baseline, квантили P10/P90) | `python -m src.cli train` → [`models_artifacts/train_report.json`](models_artifacts/train_report.json) |
+| 2 | **Самостоятельно** получать по координатам ВЭС погодные прогнозы из открытых источников, **доступные на момент прогнозирования** | [`src/weather/openmeteo.py`](src/weather/openmeteo.py): Previous Runs API, переменные `*_previous_day1/2`, координаты из [`src/config.py`](src/config.py); инструмент `fetch_weather` в [`src/agent/tools.py`](src/agent/tools.py) | Узел `fetch_weather` в любой `forecasts/trace_*.json`; кэш [`data/weather_cache/`](data/weather_cache/); [`docs/FEATURE_AVAILABILITY.md`](docs/FEATURE_AVAILABILITY.md) |
+| 3 | Прогноз выработки на следующие **24–48 часов с почасовой детализацией** | `get_issued_forecast()` → 48 часов на выпуск; колонки `horizon_h` 1…48, `lead_day` 1/2 в `forecast_t{1,2}_{дата}.csv` | `python -m scripts.verify_submission` (48 ч на выпуск, 1344 строки подачи) |
+| 4 | **Agentic AI**: система сама выполняет цикл *получение погоды → подготовка данных → запуск модели → почасовой прогноз → анализ результата → повторный расчёт при обновлении входных данных* | Граф `DayGraph` в [`src/agent/graph.py`](src/agent/graph.py): `fetch_weather → prepare_features → run_model → validate_forecast → compare_with_previous → write_outputs`, резерв `recover_baseline`; LLM-оркестратор [`src/agent/llm.py`](src/agent/llm.py) вызывает инструменты через tool calling | [`tests/test_agent_graph.py`](tests/test_agent_graph.py) (8 сценариев: сбой LLM, ранняя запись, восстановление, отказ публикации); трассы в [`forecasts/`](forecasts/) |
+| 5 | Rolling-протокол: 31.01 → прогноз на 24–48 ч, 01.02 → новый прогноз, … по всему тесту | `python -m src.cli run-agent --start 2026-01-31 --end 2026-02-27`; сводка «свежайший выпуск на каждый час» в `_build_submission()` [`src/cli.py`](src/cli.py) | 28 трасс/отчётов/пар CSV в [`forecasts/`](forecasts/); [`submission.csv`](forecasts/submission.csv) |
+| 6 | Использовать **архивные прогнозы**, а не фактическую погоду, ставшую известной позднее | Инференс видит только `*_previous_dayN`; измеренный ветер и реанализ ERA5 в признаки **не входят** (docstring [`build.py`](src/features/build.py), ADR-001); обучение и инференс используют одинаковые срезы выпуска | [`tests/test_feature_availability.py`](tests/test_feature_availability.py) (11 тестов равенства срезов), `python -m src.cli check-tz`, [`docs/DECISIONS.md`](docs/DECISIONS.md#adr-001--источник-погоды-open-meteo-previous-runs-api) |
+| 7 | Повторный расчёт при обновлении входных данных | Каждый новый выпуск NWP → новый проход графа; `compare_with_previous` измеряет дрейф против вчерашнего lead-2 прогноза тех же часов; при неудачной валидации — один пересчёт по физической кривой на **том же** выпуске | Поле `compare_with_previous` в отчётах; `retried`/`fallback` в трассах |
+
+## 🏅 По критериям оценки
+
+<!-- Разделы названы точно по рубрике организаторов. Каждый пункт — ссылка на артефакт. -->
+
+<details open>
+<summary><b>Соответствие задаче и работоспособность · 25</b></summary>
+
+- Все семь требований ТЗ закрыты и трассируются в код (таблица выше).
+- Подача сформирована и проверяется независимым верификатором без ML-зависимостей: [`scripts/verify_submission.py`](scripts/verify_submission.py).
+- Полный прогон воспроизведён командой из чистого клона с **заблокированной сетью**: все 1344 значения совпали с подачей при допуске 1e-9 ([`docs/INTEGRATION.md`](docs/INTEGRATION.md#чистый-клон)).
+- Отказоустойчивость дня: невалидный прогноз → один резерв по кривой мощности → повторная валидация → иначе день **не публикуется** (без «тихих» нулей).
+
+</details>
+
+<details open>
+<summary><b>Техническая реализация · 25</b></summary>
+
+- **Честный погодный вход**: Previous Runs API отдаёт прогноз таким, каким он был выпущен за 1–2 дня до целевого часа; фактическая погода в инференс не попадает по построению.
+- **MOS + кривая мощности в одной модели**: LightGBM обучен на *прогнозной*, а не измеренной погоде, поэтому одновременно учит аэродинамику турбины и систематические ошибки NWP; распределения train/inference совпадают.
+- **Ансамбль 5 центров NWP** (ECMWF IFS, NCEP GFS, DWD ICON, UKMO, Open-Meteo best_match) + согласие/разброс ансамбля как признаки; ветер на 10/80/100/120 м, куб скорости, плотность воздуха ρ = p/(R·T), сдвиг ветра, направление, лаги/окна внутри среза выпуска, календарь, lead time.
+- **LLM ведёт цикл, но не трогает расчёт**: канонический комплект получен с реальным GPT-6 Luna — все 28 отчётов написаны моделью, а числа прогнозов побитово совпадают с детерминированным режимом `--no-llm` (сравнение `scripts/compare_runs`).
+- **Агент как граф состояний**, а не свободный цикл: допустимый следующий инструмент задаёт граф, LLM анализирует и пишет отчёт; сбой API продолжает день с сохранённого узла без повторных расчётов; каждый шаг — в `trace_*.json`.
+- **Протокол оценки** с хронологией fit → tune → evaluate и replay по датам выпуска ([`src/backtest/evaluate.py`](src/backtest/evaluate.py)); метрики пересчитываются из сохранённого CSV.
+- Заявленная логика = фактическая: контракты модулей в [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), решения и **отрицательные результаты** в [`docs/DECISIONS.md`](docs/DECISIONS.md) (11 ADR).
+
+</details>
+
+<details open>
+<summary><b>README и воспроизводимость · 25</b></summary>
+
+- Зависимости закреплены до версии ([`requirements.txt`](requirements.txt)); версии, SHA256 исходников, данных, моделей и результатов — в [`models_artifacts/manifest.json`](models_artifacts/manifest.json).
+- Данные, погодный кэш (76 JSON), модели и подача закоммичены: прогон без сети и без ключей.
+- Свой прогон — в `runs/<имя>` (`--output-dir`): канонические результаты не перезаписываются; сравнение — `scripts/compare_runs`.
+- 69 автотестов: граф агента, LLM-адаптеры, CLI, протокол оценки, равенство признаков, пропуски погоды, отсечка обучения, верификатор, панель.
+- Маршрут проверки для судей: [`docs/JUDGE_GUIDE.md`](docs/JUDGE_GUIDE.md); Docker: `docker compose up --build`.
+
+</details>
+
+<details open>
+<summary><b>Ценность и применимость решения · 15</b></summary>
+
+- Диспетчер ВЭС получает то, что нужно для заявки на сутки вперёд: почасовой прогноз, интервал P10–P90, ожидаемую энергию за 24 ч (`expected_energy_norm_24h`) и **сигнал дрейфа** между выпусками (`significant_update`) — повод пересмотреть заявку.
+- Отчёт агента написан для оператора, а не для ML-инженера; панель показывает, *почему* прогноз такой (разброс источников NWP, статус валидации).
+- Ошибка 15.7 % номинала на сутки вперёд при 2.3× выигрыше к persistence — на уровне рабочего инструмента, а не демо (ориентир отрасли NMAE 8–12 % при лучшем NWP-входе).
+- Готово к эксплуатации: тот же код обслуживает и бэктест, и ежедневный запуск; смена LLM-провайдера — переменная окружения.
+
+</details>
+
+<details open>
+<summary><b>Потенциал развития и оригинальность · 10</b></summary>
+
+- Оригинально: обучение на архивных *прогнозах* вместо измерений (MOS-коррекция и power curve одним шагом); диагностика «оракула» — с идеальным ветром MAE 0.031, т.е. ~80 % оставшейся ошибки в NWP, а не в регрессоре — поэтому усилен именно погодный вход.
+- Граф с явными переходами вместо фреймворка — проверяемый, воспроизводимый, с восстановлением.
+- Дорожная карта с уже измеренными кандидатами: [ниже](#-потенциал-развития-и-оригинальность).
+
+</details>
+
+## 📊 Результаты
+
+### Готовая подача: февраль 2026
+
+![Почасовой прогноз обеих турбин на февраль 2026 с полосой P10–P90](docs/img/february_submission.svg)
+
+`forecasts/submission.csv` — 1344 строки (`turbine, datetime, lead_day, power_pred`), время в шкале Asia/Almaty
+как в датасете. На каждый час взят прогноз свежайшего доступного выпуска, поэтому в подаче `lead_day = 1`;
+lead-2 прогнозы тех же часов лежат в дневных CSV и используются для оценки дрейфа.
+Средняя прогнозная загрузка за месяц: T1 0.465, T2 0.463 номинала.
+
+### Ретроспективная оценка ансамбля (честные числа)
+
+![MAE ансамбля против физической кривой мощности по турбинам и горизонтам](docs/img/evaluation_mae.svg)
+
+Оценочный ансамбль обучен на целях по **30.11.2025**, проверен на **01.12.2025–31.01.2026** ровно тем же путём,
+что и подача (`get_issued_forecast → build_features → predict`). MAE нормализованной мощности:
+0.157 = средняя ошибка 15.7 % установленной мощности.
+
+| Турбина | Горизонт | MAE ансамбля | MAE baseline | RMSE | Часов-выпусков |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 0–24 ч | **0.1574** | 0.1776 | 0.2332 | 1468 |
+| 1 | 24–48 ч | **0.1729** | 0.1923 | 0.2563 | 1444 |
+| 2 | 0–24 ч | **0.1574** | 0.1792 | 0.2341 | 1438 |
+| 2 | 24–48 ч | **0.1734** | 0.1940 | 0.2581 | 1414 |
+
+Сохранено **5904 строки**, ни одного пропущенного выпуска; 48 строк lead 2 за 01.12 исключены, потому что их
+выпуск предшествовал бы отсечке обучения. Покрытие P10–P90 — **65.0 %** при номинальных 80 %: интервалы пока
+узковаты, это открытая задача. Метрики на всех наблюдаемых часах (включая простои) — в
+[`evaluation_report.json`](models_artifacts/evaluation/evaluation_report.json).
+
+> **Важная оговорка.** Декабрь–январь ранее использовались для выбора источников и настроек, поэтому это
+> *ретроспективная* оценка, а не нетронутый тест. **Фактических данных за февраль 2026 у команды нет** —
+> точность на тесте организаторов мы не изобретаем.
+
+<details>
+<summary><b>📈 Лестница моделей и предел точности (период настройки)</b></summary>
+
+![MAE: persistence, климатология, кривая мощности, LightGBM, оракул](docs/img/model_ladder.svg)
+
+| Модель | Турбина 1 | Турбина 2 |
+| --- | --- | --- |
+| Наивный persistence (значение сутки назад) | 0.377 | 0.376 |
+| Климатология (среднее по часу суток) | 0.321 | 0.318 |
+| Физическая кривая мощности (изотоническая) | 0.185 | 0.186 |
+| **LightGBM + baseline (подача)** | **0.165** | **0.166** |
+| Оракул: идеальный прогноз ветра — предел | 0.031 | — |
+
+Числа получены на периоде настройки (ранняя остановка, вес бленда) — это **не независимый тест**, а
+диагностика: кривая мощности турбины почти идеальна, вся ошибка приходит из прогноза ветра.
+Источник: [`train_report.json`](models_artifacts/train_report.json), [`docs/RESEARCH.md`](docs/RESEARCH.md#31-историческая-диагностика-источников).
+
+</details>
+
+<details>
+<summary><b>🌍 Почему пять источников NWP, а не один</b></summary>
+
+![Корреляция прогнозного ветра каждого источника с измеренным на турбине](docs/img/nwp_sources.svg)
+
+Ансамбль источников заметно сильнее любого одиночного; JMA и CMA проверены и исключены как шум;
+пространственные градиенты давления (точки N/S/E/W) проверены и не дали выигрыша на 25-км сетке
+([ADR-007](docs/DECISIONS.md#adr-007--погодный-вход-пять-источников-без-пространственных-градиентов)).
+
+</details>
+
+<details>
+<summary><b>🖼️ Историческая иллюстрация: расчёт и факт за неделю</b></summary>
 
 ![Историческая иллюстрация: расчёт и факт](docs/img/holdout_week.png)
 
-Изображение использует финальную модель на её обучающих датах. Это иллюстрация,
-а не независимая проверка точности (подробнее в разделе метрик).
+Финальная модель на её обучающих датах — иллюстрация подгонки, **не** оценка точности
+(`python -m scripts.plot_holdout`).
 
-**Начать проверку:** [короткий маршрут для судей](docs/JUDGE_GUIDE.md).
+</details>
 
-## Где что находится
+## 🏗️ Архитектура
 
-| Что посмотреть | Путь |
-| --- | --- |
-| Запуск и панель | `src/cli.py`, `app.py` |
-| Граф агента и адаптеры LLM | `src/agent/` |
-| Погода, признаки, обучение | `src/weather/`, `src/features/`, `src/models/` |
-| Исходные данные и архив NWP | `data/raw/`, `data/weather_cache/` |
-| Итоговые CSV, отчёты и трассы | `forecasts/` |
-| Артефакты модели и метрики подбора | `models_artifacts/` |
-| Проверки и эксперименты | `tests/`, `scripts/verify_submission.py`, [индекс экспериментов](docs/EXPERIMENTS.md) |
-| Ограничения и следующие задачи | [План](docs/NEXT_STEPS.md), [решения](docs/DECISIONS.md) |
+### Цикл одного выпуска — ровно по формулировке ТЗ
 
-## Ключевые идеи
+```mermaid
+flowchart LR
+    W[("Open-Meteo<br/>Previous Runs<br/>5 NWP-центров")] --> A
+    subgraph DayGraph["DayGraph · src/agent/graph.py · один граф для LLM и --no-llm"]
+        direction LR
+        A["fetch_weather<br/>получение внешних<br/>погодных данных"] --> B["prepare_features<br/>подготовка данных<br/>48 ч × 108 признаков"]
+        B --> C["run_model<br/>запуск модели<br/>LightGBM×5 + baseline + P10/P90"]
+        C --> D{"validate_forecast<br/>границы, полнота,<br/>NaN, flatline"}
+        D -->|ok| E["compare_with_previous<br/>анализ результата:<br/>дрейф к выпуску D−1"]
+        D -->|первая неудача| R["recover_baseline<br/>повторный расчёт<br/>по кривой мощности"]
+        R --> D
+        D -->|повторная неудача| X["стоп: день не публикуется,<br/>трасса ошибки сохранена"]
+        E --> F["write_outputs<br/>почасовой прогноз CSV<br/>+ отчёт оператора"]
+    end
+    F --> O[("forecasts/<br/>forecast_t1,t2_D.csv<br/>report_D.md · trace_D.json")]
+    O -.->|следующий выпуск D+1| A
+```
 
-1. **Архивные прогнозы погоды.** Клиент использует Open-Meteo *Previous Runs API*
-   и переменные `*_previous_day1/2`. Наблюдаемая погода в основной прогноз не подмешивается.
-   Обучение и инференс используют одинаковые срезы выпусков. Точное время публикации
-   погодных значений в кэше отсутствует: доступность к фиксированному часу выпуска
-   пока не доказана. Подробности — [FEATURE_AVAILABILITY](docs/FEATURE_AVAILABILITY.md).
-2. **Модель обучена на прогнозной погоде, а не на измеренной.** Обучающая матрица собрана
-   из архивных прогнозов (03.2024–01.2026), сматченных с фактической выработкой. Модель
-   одновременно выучивает кривую мощности турбины и систематические ошибки погодных моделей
-   (MOS-коррекция и power curve в одном шаге) — обе стадии используют прогнозную погоду.
-   Равенство признаков выпуска, границы суток и пропуски проверяются автоматическими тестами.
-3. **Ансамбль из 5 NWP-источников** (ECMWF, NCEP/GFS, DWD/ICON, UKMO, best_match),
-   отобранных по корреляции с измеренным на турбине ветром; согласие/разброс ансамбля —
-   отдельные фичи. Диагностика с измеренным ветром дала меньшую ошибку, поэтому
-   качество погодного входа — одно из направлений улучшения. Исторические сравнения
-   и их ограничения описаны в исследовательском отчёте.
-4. **Agentic-цикл на LLM** с типизированными инструментами и проверками каждого дня: получение
-   погоды → фичи → модель → валидация (границы, полнота, аномалии) → сравнение со вчерашним
-   запуском → отчёт оператора. По умолчанию — OpenAI `gpt-6-luna`; альтернативы —
-   Claude или OpenAI-совместимый NVIDIA NIM. Режим `--no-llm` выполняет цикл детерминированно —
-   проверка не требует наших ключей.
+LLM (OpenAI `gpt-6-luna` по умолчанию, Claude или NVIDIA NIM — через переменные окружения) получает после
+каждого вызова `next_tool`, анализирует результаты и составляет отчёт; недопустимый переход не меняет
+состояние. Сбой API продолжает тот же граф с текущего узла без повторного получения погоды или запуска
+модели — поведение закреплено тестами. Восстановление использует уже рассчитанную физическую кривую
+на **том же** выпуске архивной погоды: повторное чтение неизменного кэша не выдаётся за обновление источника.
 
-## Ретроспективная оценка после интеграции
+### Данные и обучение
 
-Оценочный ансамбль обучен на целях по **30.11.2025**; проверка — **01.12.2025–31.01.2026**.
-Прогнозы получены тем же путём, что и подача. Декабрь–январь раньше влияли на выбор
-источников и решения команды, поэтому это ретроспективная оценка, а не нетронутый тест.
-Финальные модели для февраля затем отдельно обучены по 31.01.2026.
+```mermaid
+flowchart TB
+    subgraph src["Источники"]
+        S1["SCADA 10-мин<br/>data/raw/turbine_1,2.csv<br/>11.03.2023–31.01.2026"]
+        S2["Архив прогнозов NWP<br/>data/weather_cache/ · 76 JSON<br/>03.2024–02.2026"]
+    end
+    S1 --> H["Агрегация к часу<br/>≥4/6 интервалов · фильтр простоев<br/>src/features/dataset.py"]
+    S2 --> I["Срезы по дате выпуска<br/>get_issued_forecast · lead 1/2<br/>src/weather/openmeteo.py"]
+    I --> F["108 признаков на срез<br/>build_features<br/>src/features/build.py"]
+    H --> T
+    F --> T["training_matrix<br/>обучение и инференс — одни срезы<br/>цели ≤ 31.01.2026"]
+    T --> M["LightGBM×5 сидов · objective L1<br/>изотоническая кривая · квантили 0.1/0.9<br/>src/models/train.py"]
+    M --> P["models_artifacts/turbine_1,2.pkl<br/>train_report.json · manifest.json"]
+    T --> EV["Протокол оценки<br/>fit ≤ 30.09 · tune 10–11.2025 · evaluate 12.2025–01.2026<br/>src/backtest/evaluate.py"]
+    EV --> ER["models_artifacts/evaluation/<br/>evaluation_predictions.csv · evaluation_report.json"]
+```
 
-MAE нормализованной мощности; 0.157 означает среднюю абсолютную ошибку около 15.7%
-номинальной мощности. Таблица использует цели после фильтра простоев.
+### Модули и контракты
 
-| Турбина | Горизонт | MAE ансамбля | MAE baseline | Часов-выпусков |
-| --- | --- | --- | --- | --- |
-| 1 | 0–24 ч | 0.1574 | 0.1776 | 1468 |
-| 1 | 24–48 ч | 0.1729 | 0.1923 | 1444 |
-| 2 | 0–24 ч | 0.1574 | 0.1792 | 1438 |
-| 2 | 24–48 ч | 0.1734 | 0.1940 | 1414 |
+| Модуль | Назначение | Ключевой контракт |
+| --- | --- | --- |
+| [`src/weather/openmeteo.py`](src/weather/openmeteo.py) | Previous Runs API, JSON-кэш, срезы выпуска | `get_weather(start, end)` → `{model}__{var}__d{1\|2}`; `get_issued_forecast(issue_date, weather)` → 48 ч |
+| [`src/features/dataset.py`](src/features/dataset.py) | Почасовая агрегация SCADA, фильтр простоев | `load_hourly(turbine)` → `power`, `target`, `wind_meas` |
+| [`src/features/build.py`](src/features/build.py) | Признаки, стек выпусков, отсечка целей | `build_features(slice)`; `issued_feature_stack(weather)`; `training_matrix()` → `X, y` |
+| [`src/models/train.py`](src/models/train.py) | Подбор на fit/tune, 5 финальных LightGBM, baseline, квантили | `train_all(weather, artifacts_dir=None)` |
+| [`src/models/predict.py`](src/models/predict.py) | Прогноз мощности и интервалов, NaN при отсутствии ветра | `predict(turbine, features)` → `power_pred, power_baseline, power_lgb, power_p10, power_p90, lead_day` |
+| [`src/agent/graph.py`](src/agent/graph.py) | Состояния, переходы, трасса | `DayGraph.execute(tool, args)` → результат + `next_tool` |
+| [`src/agent/tools.py`](src/agent/tools.py) | Шесть инструментов агента + `DayContext` | чистые функции над контекстом дня |
+| [`src/agent/llm.py`](src/agent/llm.py) | Адаптеры OpenAI-совместимый / Anthropic | `pick_backend()`; один инструмент за ход, повтор на 429/5xx |
+| [`src/agent/loop.py`](src/agent/loop.py) | Запуск дня в режиме LLM / без LLM | `run_day_llm`, `run_day_no_llm` |
+| [`src/backtest/evaluate.py`](src/backtest/evaluate.py) | Ретроспективный replay, CSV/JSON, пересчёт метрик | `--output-dir` |
+| [`src/cli.py`](src/cli.py) | `train`, `run-agent`, `check-tz`, `list-models` | защита LLM-отчётов от перезаписи, сборка `submission.csv` |
+| [`app.py`](app.py) | Панель оператора Streamlit + Plotly | `--forecast-dir` |
 
-Полный результат: [оценочные прогнозы CSV](models_artifacts/evaluation/evaluation_predictions.csv)
-и [отчёт с параметрами и метриками](models_artifacts/evaluation/evaluation_report.json).
-Сохранено **5904 строки**, все ожидаемые выпуски присутствуют. 48 первоначальных строк
-lead 2 исключены: их выпуск предшествовал бы окончанию настройки модели.
-Покрытие P10–P90 — **65.0%** при номинальных 80%: интервалы недостаточно широки.
-Метрики на всех наблюдаемых часах, пропуски и исключения также записаны в отчёте.
+Подробнее — [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-Повторить оценку: `python -m src.backtest.evaluate --output-dir runs/evaluation-v1`.
-Протокол — [EVALUATION](docs/EVALUATION.md). `train_report.json` содержит отдельные
-метрики **настройки**, а исторические сравнения сохранены в [RESEARCH](docs/RESEARCH.md).
-Февральского факта у команды нет.
+### Панель оператора
 
-## Быстрый старт
+`streamlit run app.py` — граф выполнения агента с временем и статусом каждого узла, прогноз выработки с
+интервалом P10–P90, разброс ансамбля NWP-источников, отчёт и структурированный журнал решений. Кнопка
+«Обновить результаты» перечитывает сохранённые файлы (просмотр событий, не трансляция процесса).
+Панель читает `forecasts/` либо каталог из `--forecast-dir`; незавершённый запуск скрывается.
 
-Сохранённые модели, данные и погодный кэш уже в репозитории. Установка зависимостей
-требует сети; прогноз без LLM после установки работает из кэша. Для нового прогона
-используйте отдельный каталог: все CSV, отчёты и трассы останутся вместе, а командная
-подача и отчёты в `forecasts/` сохранятся. Текущий комплект пересчитан после интеграции
-с LLM-агентом (GPT-6 Luna): все 28 отчётов написаны моделью; числа прогнозов при этом
-побитово совпадают с детерминированным режимом — LLM ведёт цикл и пишет анализ,
-но не меняет расчёт.
+## 🚀 Запуск
 
-### Локально: Python 3.12+
+<details open>
+<summary><b>Локально · Python 3.12+</b></summary>
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
+python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-python -m src.cli run-agent --start 2026-01-31 --end 2026-02-27 \
-  --no-llm --output-dir runs/judge-check
+python -m src.cli run-agent --start 2026-01-31 --end 2026-02-27 --no-llm --output-dir runs/judge-check
 python -m scripts.verify_submission --directory runs/judge-check
 python -m pytest tests/ -q
 streamlit run app.py -- --forecast-dir runs/judge-check
 ```
 
-Полный прогон — 28 выпусков и 1344 строки в `runs/judge-check/submission.csv`.
-Колонки подачи: `turbine, datetime, lead_day, power_pred`; время — локальная шкала
-Asia/Almaty. Трассы и отчёты сохраняются в этом же каталоге. Сравнение со вчерашним
-выпуском также читает выбранный каталог и честно отмечает отсутствие предыдущего дня.
+Без `--output-dir` CLI пишет в `forecasts/`, без `--forecast-dir` панель читает оттуда. В offline-режиме CLI
+защищает существующие LLM-отчёты; `--overwrite` явно разрешает их замену. Каталог `runs/` не попадает в git.
 
-Без `--output-dir` CLI пишет в `forecasts/`, без `--forecast-dir` панель читает оттуда.
-Offline-прогон защищает имеющиеся LLM-отчёты; `--overwrite` явно разрешает их замену.
-Каталог `runs/` не включается в git. Подробности: [правило владельца прогона](docs/GIT_WORKFLOW.md).
+</details>
 
-### Docker
+<details>
+<summary><b>Docker</b></summary>
 
 ```bash
-docker compose up --build
-```
-
-Панель открывается на **http://localhost:8501**. Образ обучает модели при сборке;
-каталог `forecasts/` подключён с хоста. Для отдельной проверки в одноразовом контейнере:
-
-```bash
+docker compose up --build            # обучает модели при сборке, панель на http://localhost:8501
 docker compose run --rm windcast sh -c \
-  'python -m src.cli run-agent --start 2026-01-31 --end 2026-02-27 --no-llm --output-dir /tmp/judge-check && python -m scripts.verify_submission --directory /tmp/judge-check'
+  'python -m src.cli run-agent --start 2026-01-31 --end 2026-02-27 --no-llm --output-dir /tmp/judge-check \
+   && python -m scripts.verify_submission --directory /tmp/judge-check'
 ```
 
-Результаты этого smoke-прогона удалятся вместе с контейнером. Полная репетиция
-объединённой версии и фиксация совместимых зависимостей остаются пунктами приёмки.
+Каталог `forecasts/` подключён с хоста. Контейнерная репетиция из чистого клона в Linux — отдельная
+проверка ([статус](#-статус-проекта)).
 
-### LLM и дополнительные команды
+</details>
+
+<details>
+<summary><b>Режим LLM-агента</b></summary>
 
 ```bash
-# Ключ в локальном .env по .env.example; один день с LLM в отдельном каталоге
+cp .env.example .env                 # OPENAI_API_KEY (или ANTHROPIC_API_KEY / NVIDIA NIM), см. комментарии в файле
+python -m src.cli list-models        # какие модели доступны по вашему ключу
 python -m src.cli run-agent --start 2026-02-10 --end 2026-02-10 --output-dir runs/llm-demo
-
-# Диагностика стыковки времени и сравнение двух полных прогонов
-python -m src.cli check-tz
-python -m scripts.compare_runs --a forecasts --b runs/judge-check
+streamlit run app.py -- --forecast-dir runs/llm-demo
 ```
 
-Один день создаёт частичную подачу. Для подтверждения LLM-режима проверить в трассе
-`mode=openai`, `completed=true`, `fallback=false`; без ключа будет использован шаблон.
-Переобучение выполняется отдельно через `python -m src.cli train` и **заменяет**
-`models_artifacts/`. Общие модели и канонические прогнозы пересчитывает интегратор после
-проверки веток данных и оценки. Прямые зависимости зафиксированы в `requirements.txt`; модели пересобраны с
-scikit-learn 1.9.1. Локальная проверка — Python 3.12.6. Итоги и ограничения среды —
-[INTEGRATION](docs/INTEGRATION.md). Контейнерная проверка остаётся отдельной задачей.
+Приоритет бэкендов: `LLM_BACKEND` → ключ OpenAI → `ANTHROPIC_API_KEY`. Для настоящего LLM-прогона в трассе
+ожидается `mode=openai`, `completed=true`, `fallback=false`; без ключа выполняется шаблонный отчёт по тому же
+графу. Ключи — только в локальном `.env` (в `.gitignore`).
 
-## Архитектура
+</details>
 
-LLM и `--no-llm` используют один **граф состояний** — `DayGraph` в
-`src/agent/graph.py`. Граф хранит контекст дня, проверяет порядок инструментов и
-сохраняет каждый шаг в `trace_<дата>.json` выбранного каталога. LLM получает `next_tool`,
-анализирует результаты и составляет отчёт. При сбое API исполнение продолжается
-с текущего узла без повторного получения погоды или запуска модели.
+<details>
+<summary><b>Дополнительные команды</b></summary>
 
-```mermaid
-flowchart TD
-    A[fetch_weather: архив NWP] --> B[prepare_features]
-    B --> C[run_model: LightGBM + baseline]
-    C --> D{validate_forecast}
-    D -->|успех| E[compare_with_previous]
-    D -->|первая неудача| R[recover_baseline: кривая мощности]
-    R --> D
-    D -->|повторная неудача| F[остановка: трасса ошибки]
-    E --> G[write_outputs: CSV + отчёт]
+```bash
+python -m src.cli train                                    # переобучение → ЗАМЕНЯЕТ models_artifacts/
+python -m src.cli check-tz                                 # лаг максимальной корреляции прогноз/факт ветра = 0
+python -m src.backtest.evaluate --output-dir runs/eval     # ретроспективная оценка по протоколу
+python -m scripts.compare_runs --a forecasts --b runs/x    # разница двух прогонов
+python -m src.backtest.experiments                         # пространственные градиенты (ADR-007)
+python -m src.backtest.prof_ideas                          # двухступенчатая калибровка (ADR-008)
 ```
 
-Восстановление использует уже рассчитанный физический baseline на **том же выпуске
-архивной погоды**. Повторное чтение неизменного кэша не выдаётся за обновление источника.
-После восстановления прогноз проверяется снова; интервалы ансамбля к нему не применяются.
-При ошибке инструмента или повторной неудачной валидации CLI завершится с ошибкой,
-сохранив трассу. Ранее записанные файлы этой даты остаются на диске, но панель скрывает
-их при незавершённом запуске, а сборка февральской подачи требует успешно повторить
-такой день. Ошибки выпусков вне диапазона 31.01–27.02 не блокируют февральскую подачу.
+Полный список с побочными эффектами: [`docs/EXPERIMENTS.md`](docs/EXPERIMENTS.md).
 
-LLM по умолчанию — OpenAI GPT-6 Luna; также доступны Claude и NVIDIA NIM.
-Без ключа используется шаблон отчёта и тот же граф. Его поведение проверяется в
-`tests/test_agent_graph.py`, включая сбой LLM, раннюю запись и резервный расчёт.
+</details>
 
-### Панель оператора
+## 🗂️ Структура репозитория
 
-`streamlit run app.py` — граф выполнения агента с временем и статусом каждого узла,
-прогноз выработки с интервалом P10–P90, разброс ансамбля NWP-источников и журнал
-решений агента. Кнопка «Обновить результаты» перечитывает сохранённые CSV, отчёт и
-трассу; это просмотр событий, а не автоматическая трансляция работающего процесса.
-Историческая иллюстрация показывает факт и расчёт финальной модели на её обучающих
-датах — её MAE нельзя использовать как независимую оценку качества.
+```text
+.
+├── README.md                     ← вы здесь
+├── requirements.txt              ← закреплённые версии (Python 3.12.6, LightGBM 4.7.0, sklearn 1.9.1)
+├── Dockerfile · docker-compose.yml · .env.example
+├── app.py                        ← панель оператора (Streamlit + Plotly)
+├── src/
+│   ├── config.py                 ← координаты, периоды, 5 NWP-источников, переменные погоды
+│   ├── cli.py                    ← train · run-agent · check-tz · list-models
+│   ├── weather/openmeteo.py      ← Previous Runs API, кэш, срезы по дате выпуска
+│   ├── features/dataset.py       ← SCADA → час, фильтр простоев
+│   ├── features/build.py         ← 108 признаков, стек выпусков, training_matrix
+│   ├── models/train.py · predict.py
+│   ├── agent/graph.py · tools.py · llm.py · loop.py
+│   └── backtest/evaluate.py · experiments.py · prof_ideas.py
+├── data/
+│   ├── raw/turbine_1.csv · turbine_2.csv     ← датасет организаторов (10 мин, 03.2023–01.2026)
+│   └── weather_cache/*.json                  ← 76 сохранённых ответов Open-Meteo → офлайн-прогон
+├── models_artifacts/
+│   ├── turbine_1.pkl · turbine_2.pkl         ← подача: обучены по 31.01.2026
+│   ├── train_report.json · manifest.json     ← метрики настройки, версии, SHA256
+│   └── evaluation/                           ← оценочные модели (по 30.11.2025), CSV прогнозов, JSON метрик
+├── forecasts/                                ← КАНОНИЧЕСКИЙ РЕЗУЛЬТАТ (обновляет только интегратор)
+│   ├── submission.csv                        ← 1344 строки, февраль 2026
+│   ├── forecast_t{1,2}_YYYY-MM-DD.csv        ← 28 выпусков × 2 турбины × 48 часов
+│   ├── report_YYYY-MM-DD.md                  ← отчёт агента оператору
+│   └── trace_YYYY-MM-DD.json                 ← трасса графа: узлы, статусы, время, next_tool
+├── scripts/verify_submission.py · compare_runs.py · plot_holdout.py
+├── tests/                                    ← 69 тестов (см. ниже)
+└── docs/                                     ← ТЗ, архитектура, данные, решения, оценка, маршрут судьи
+```
 
-Подробности: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (модули, контракты),
-[`docs/RESEARCH.md`](docs/RESEARCH.md) (диагностика источников, литература),
-[`docs/DATA.md`](docs/DATA.md) (профиль данных, чистка), [`docs/DECISIONS.md`](docs/DECISIONS.md)
-(принятые решения и результаты проверенных гипотез), [`docs/CASE.md`](docs/CASE.md) (ТЗ).
+### Документация
 
-## Данные и сторонние компоненты
+| Документ | Что внутри |
+| --- | --- |
+| [`docs/CASE.md`](docs/CASE.md) | Официальное ТЗ и критерии оценки (не редактируется) |
+| [`docs/JUDGE_GUIDE.md`](docs/JUDGE_GUIDE.md) | Пошаговый маршрут проверки для судей |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Граф выпуска, обучение и оценка, контракты модулей |
+| [`docs/DATA.md`](docs/DATA.md) | Профиль датасета, пропуски, правила агрегации и фильтра простоев |
+| [`docs/RESEARCH.md`](docs/RESEARCH.md) | Источники погоды, диагностика, литература |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md) | 11 ADR, включая отрицательные результаты |
+| [`docs/EVALUATION.md`](docs/EVALUATION.md) | Протокол ретроспективной оценки и контракт файлов |
+| [`docs/FEATURE_AVAILABILITY.md`](docs/FEATURE_AVAILABILITY.md) | Доступность архивных прогнозов, одинаковые входы train/inference |
+| [`docs/EXPERIMENTS.md`](docs/EXPERIMENTS.md) | Команды экспериментов и их побочные эффекты |
+| [`docs/INTEGRATION.md`](docs/INTEGRATION.md) | Выполненные проверки, чистый клон, ограничения среды |
+| [`docs/NEXT_STEPS.md`](docs/NEXT_STEPS.md) · [`docs/TASKS.md`](docs/TASKS.md) · [`docs/GIT_WORKFLOW.md`](docs/GIT_WORKFLOW.md) | План, владельцы, git-процесс |
 
-- Датасет организаторов: `data/raw/turbine_{1,2}.csv` — 10-минутные ряды 11.03.2023–31.01.2026
-  (ветер, нормализованная мощность, температура). Агрегация к часу: ≥4/6 интервалов,
-  простои (мощность ~0 при рабочем ветре) исключены из обучения — правила в `docs/DATA.md`.
-- Геолокация — из ссылок организаторов: T1 43.645150, 78.535604; T2 43.643198, 78.538828
-  (расстояние ~300 м → одна точка погоды, модели раздельные).
-- Погода: [Open-Meteo](https://open-meteo.com) Previous Runs API (некоммерческая лицензия),
-  все ответы закэшированы в `data/weather_cache/` и закоммичены — воспроизводимость офлайн.
-- Библиотеки: pandas, LightGBM, scikit-learn, httpx, matplotlib, anthropic SDK.
+## 🧪 Тесты и проверки
 
-## Что проверяли и отклонили
+| Файл | Что защищает |
+| --- | --- |
+| [`tests/test_agent_graph.py`](tests/test_agent_graph.py) | Одинаковый граф во всех режимах; сбой LLM продолжает с сохранённого узла; ранняя запись отклоняется; неудачная валидация → один резерв или отказ публикации; ошибка инструмента не оставляет частичных файлов; неудачный повтор не переиспользует старые CSV |
+| [`tests/test_agent_llm.py`](tests/test_agent_llm.py) | Параметры Chat Completions для gpt-6-luna; отказ от пакетных вызовов; продолжение после отклонённой записи |
+| [`tests/test_feature_availability.py`](tests/test_feature_availability.py) | Признаки обучения = признакам инференса для того же выпуска; лаги не пересекают границу выпуска; края архива; пропуски остаются NaN |
+| [`tests/test_training_cutoff.py`](tests/test_training_cutoff.py) | Будущие цели не попадают в обучение; один стек признаков на обе турбины |
+| [`tests/test_evaluation_protocol.py`](tests/test_evaluation_protocol.py) | Маски fit/tune/evaluate не пересекаются; оценочные цели не влияют на модель; метрики пересчитываются из CSV; нечисловые прогнозы не исчезают |
+| [`tests/test_prediction_missing_weather.py`](tests/test_prediction_missing_weather.py) | Отсутствующий ветер → NaN, а не исключение; резерв и отказ публикации |
+| [`tests/test_cli_output_dir.py`](tests/test_cli_output_dir.py) | Изоляция `--output-dir`, защита LLM-отчётов, проверка трасс |
+| [`tests/test_verify_submission.py`](tests/test_verify_submission.py) | Независимый верификатор подачи |
+| [`tests/test_app_smoke.py`](tests/test_app_smoke.py) | Панель рендерится в обоих режимах, скрывает незавершённый запуск, читает изолированный прогон |
 
-Ниже — исторические сравнения на периоде настройки. Отрицательные
-результаты сохранены в `docs/DECISIONS.md` — они объясняют, почему архитектура именно такая.
+Перед публикацией: `python -m pytest tests/ -q` · `python -m scripts.verify_submission` · `git diff --check`.
 
-| Гипотеза | Результат | Вердикт |
+## 🔬 Эксперименты и отрицательные результаты
+
+<!-- Новая гипотеза → строка здесь + ADR в docs/DECISIONS.md. Числа — из артефакта, не из памяти. -->
+
+| Гипотеза | Результат (MAE, период настройки) | Вердикт |
 | --- | --- | --- |
-| Пространственные градиенты давления (точки N/S/E/W ±0.5°) | 0.1658 против 0.1650 | Отклонено (ADR-007) |
-| Двухступенчатая схема: калибровка NWP → ветер, затем кривая мощности | 0.1653 / 0.1686 против 0.1650 / 0.1661 | Отклонено (ADR-008) |
-| Признаки недавней фактической выработки | 0.1650 / 0.1645 — на уровне шума | Неприменимо: датасет обрывается 31.01 (ADR-008) |
-| Фреймворк оркестрации (LangGraph и аналоги) | Общий граф с проверкой переходов и трассой | Отклонено (ADR-009) |
+| Пространственные градиенты давления (точки N/S/E/W ±0.5°) | 0.1658 против 0.1650 | Отклонено — [ADR-007](docs/DECISIONS.md#adr-007--погодный-вход-пять-источников-без-пространственных-градиентов) |
+| Двухступенчатая схема: калибровка NWP → ветер, затем кривая мощности | 0.1653 / 0.1686 против 0.1650 / 0.1661 | Отклонено — [ADR-008](docs/DECISIONS.md#adr-008--прямая-схема-nwp--мощность-без-ступени-калибровки-ветра) |
+| Признаки недавней фактической выработки | 0.1650 / 0.1645 — в пределах шума | Неприменимо: датасет обрывается 31.01, факта февраля нет — [ADR-008](docs/DECISIONS.md#adr-008--прямая-схема-nwp--мощность-без-ступени-калибровки-ветра) |
+| Источники JMA, CMA | corr 0.541 / 0.613 — ухудшали ансамбль | Исключены — [ADR-007](docs/DECISIONS.md#adr-007--погодный-вход-пять-источников-без-пространственных-градиентов) |
+| Нейросетевая временная модель (LSTM/TFT) | persistence на 24–48 ч почти не несёт сигнала (MAE 0.377) | Отклонено — [RESEARCH §4.1](docs/RESEARCH.md#41-что-проверено-о-временных-зависимостях) |
+| Фреймворк оркестрации (LangGraph и аналоги) | Явный граф с проверкой переходов и трассой покрыт тестами | Отклонено — [ADR-009](docs/DECISIONS.md#adr-009--общий-граф-состояний-без-фреймворка-оркестрации) |
 
-Показательный факт из проверки калибровки: обученный регрессор предсказывает ветер на
-площадке **хуже**, чем простое среднее ансамбля NWP (1.801 против 1.779 м/с). Это результат конкретного
-эксперимента; перенос на другой период и другие способы калибровки ещё нужно проверить.
+Показательный факт: обученный калибровочный регрессор предсказывает ветер на площадке **хуже**, чем простое
+среднее ансамбля NWP (1.801 против 1.779 м/с) — среднее ансамбля уже близко к оптимальной оценке ветра.
 
-## Ограничения и развитие
+## ⚠️ Ограничения (честно)
 
-Приоритеты, файлы и критерии готовности: [план следующих шагов](docs/NEXT_STEPS.md).
-Следующая волна: показать сохранённую оценку в панели и проверить контейнерную
-сборку в Linux. Единые признаки, протокол оценки и очистка документации уже объединены.
+- **Точность за февраль 2026 неизвестна** — факт у организаторов. Все наши метрики ретроспективные.
+- Декабрь–январь ранее влияли на выбор источников и настроек, поэтому оценка не является нетронутым тестом.
+- **Интервалы P10–P90 недокрывают факт** (65 % при номинале 80 %) — не называть их калиброванным 80 % интервалом.
+- Previous Runs API не хранит время публикации каждого значения: равенство признаков train/inference проверено,
+  доступность **всего** среза к фиксированному часу выпуска формально не доказана ([`FEATURE_AVAILABILITY`](docs/FEATURE_AVAILABILITY.md)).
+- Простои и ограничения мощности непредсказуемы по погоде: модель прогнозирует **доступную ветровую выработку**,
+  а не решения диспетчера; на всех наблюдаемых часах метрики чуть иные (см. `all_observed` в отчёте оценки).
+- Контейнерная репетиция релиза в Linux из чистого клона — отдельная проверка ([статус](#-статус-проекта));
+  локальное воспроизведение без сети подтверждено, наличие Dockerfile само по себе не доказывает контейнерный прогон.
+- Лицензия Open-Meteo — некоммерческая; для промышленного контура нужен коммерческий тариф или свой архив NWP.
 
-- Простои и ограничения мощности непредсказуемы по погоде — модель прогнозирует
-  доступную ветровую выработку, а не решения диспетчера.
-- Признаки недавней выработки в реальной эксплуатации доступны (у оператора живая SCADA)
-  и требуют отдельной проверки возможного выигрыша; в этом бэктесте их взять неоткуда — история кончается 31.01.2026.
-- Дальше по ценности: проверка новых источников NWP и времени их публикации,
-  автоматическое переобучение при дрейфе погодных моделей, привязка интервала P10–P90
-  к заявкам на рынок балансирующей энергии.
+## 🔭 Потенциал развития и оригинальность
 
-## Команда
+<!-- Кандидаты упорядочены по ожидаемому выигрышу. Перенос в «сделано» — только после измерения по протоколу оценки. -->
 
-KnewIT 3, 3 разработчика. Разделение работ: `docs/TASKS.md`, git-процесс: `docs/GIT_WORKFLOW.md`.
+1. **Нейросетевая NWP как шестой источник.** ECMWF AIFS доступна в Previous Runs API с ветром на 100 м
+   для всего тестового периода — первый кандидат на добавление и проверку по протоколу replay.
+2. **Калибровка интервалов**: конформная поправка P10–P90 по остаткам периода настройки; целевое покрытие 80 %.
+3. **Аналоговый ансамбль (AnEn)**: поиск похожих исторических прогнозных ситуаций — эмпирическая неопределённость
+   и объяснимость («этот час похож на 14.11.2024, тогда выработка была 0.62») в отчёте агента.
+4. **Признаки живой SCADA** в эксплуатации (у оператора они есть, в бэктесте — нет) и автоматическое
+   переобучение при дрейфе погодных моделей, которое агент уже умеет обнаруживать через `compare_with_previous`.
+5. **Привязка к рынку балансирующей энергии**: превращение P10–P90 в заявку с учётом штрафов за небаланс.
+6. **Масштабирование**: та же схема — одна точка погоды, модели на турбину — переносится на ВЭС любого размера;
+   ансамбль членов EPS проверен и пока недоступен в архиве за февраль 2026 (зафиксировано как отрицательный результат).
+
+Что уже оригинально в текущей версии: MOS-коррекция и кривая мощности одной моделью на *прогнозной* погоде;
+диагностика «оракула», направившая усилия в погодный вход; граф состояний с восстановлением и трассой вместо
+свободного LLM-цикла; независимый верификатор подачи; протокол replay по датам выпуска с сохранённым происхождением
+каждой строки.
+
+## 📚 Данные и сторонние компоненты
+
+<!-- Правило 5.4.4 регламента: раскрывать сторонний код, модели, данные и шаблоны. -->
+
+- **Датасет организаторов**: `data/raw/turbine_{1,2}.csv` — 10-минутные ряды 11.03.2023–31.01.2026
+  (142 360 и 149 499 строк; пропуски 6.6 % и 1.9 %, у T1 разрыв 41 день в мае–июне 2024). Правила обработки — [`docs/DATA.md`](docs/DATA.md).
+- **Геолокация** из ссылок ТЗ: T1 `43.645150, 78.535604`, T2 `43.643198, 78.538828` (~300 м → одна точка погоды, модели раздельные).
+- **Погода**: [Open-Meteo](https://open-meteo.com) Previous Runs API (лицензия CC BY-NC); все ответы закэшированы в `data/weather_cache/`.
+- **Библиотеки**: pandas, NumPy, scikit-learn, LightGBM, httpx, Streamlit, Plotly, matplotlib, pytest, OpenAI-совместимый HTTP-клиент, anthropic SDK.
+- **LLM в продукте**: OpenAI `gpt-6-luna` (Chat Completions, tool calling); альтернативы Claude, NVIDIA NIM.
+- **AI-ассистенты разработки**: OpenAI Codex CLI и Claude Code — по правилам хакатона; архитектура, ML-решения и проверки — за командой.
+- Литература: Glahn & Lowry (1972) MOS; Hong et al. (2016) GEFCom2014; Giebel & Kariniotakis (2017); Draxl et al. (2015) — [`docs/RESEARCH.md`](docs/RESEARCH.md#5-литература-исходного-исследования).
+
+## 🧭 Как расширять этот README
+
+Проект продолжает развиваться; README устроен так, чтобы правки были локальными:
+
+- **Изменилось состояние компонента** → одна строка в [Статусе проекта](#-статус-проекта) (✅ / 🔄 / ⬜) со ссылкой на артефакт.
+- **Новая функция по ТЗ** → строка в [матрице трассируемости](#-соответствие-тз-матрица-трассируемости): требование → файл → команда проверки.
+- **Новый инструмент агента** → узел в mermaid-графе [цикла выпуска](#цикл-одного-выпуска--ровно-по-формулировке-тз) и запись в `NODES`/`EDGES` [`src/agent/graph.py`](src/agent/graph.py).
+- **Новый источник NWP или признак** → `WEATHER_MODELS`/`WEATHER_VARS` в [`src/config.py`](src/config.py), повторная оценка `src.backtest.evaluate`, обновление таблицы результатов **числами из `evaluation_report.json`**.
+- **Проверенная гипотеза** → строка в [экспериментах](#-эксперименты-и-отрицательные-результаты) + ADR в [`docs/DECISIONS.md`](docs/DECISIONS.md), даже если результат отрицательный.
+- **Графики** — SVG в `docs/img/`, генерируются скриптом из сохранённых CSV/JSON (не из памяти); PNG-иллюстрация — `scripts/plot_holdout.py`.
+- Секции свёрнуты через `<details>`: судья видит суть на первом экране и раскрывает нужное.
+
+<details>
+<summary><b>📝 Журнал изменений</b></summary>
+
+| Дата | Изменение |
+| --- | --- |
+| 23.09.2026 | Конвейер целиком: Previous Runs, признаки, LightGBM + baseline, агент, CLI |
+| 23.09.2026 | Диагностика источников, отбор 5 NWP-моделей, отрицательный результат по градиентам |
+| 23.09.2026 | Квантили P10/P90, полный прогон февраля, независимый верификатор подачи |
+| 23.09.2026 | Единый граф состояний LLM/offline, восстановление, изоляция прогонов |
+| 23.09.2026 | Признаки по срезам выпуска, протокол ретроспективной оценки, чистый клон без сети |
+| 23.09.2026 | Канонический LLM-прогон после интеграции: 28/28 отчётов от GPT-6 Luna, числа совпадают с `--no-llm` |
+| 23.09.2026 | README для судей: матрица трассируемости, графики из артефактов, статус проекта |
+
+</details>
+
+## 👥 Команда
+
+**KnewIT 3** — 3 разработчика. Разделение работ: [`docs/TASKS.md`](docs/TASKS.md); git-процесс и правило владельца
+прогона: [`docs/GIT_WORKFLOW.md`](docs/GIT_WORKFLOW.md). Репозиторий: <https://github.com/BAITC-Hacks/hack-f0ab74e4-knewit-3>.
