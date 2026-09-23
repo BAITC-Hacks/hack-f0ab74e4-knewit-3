@@ -135,34 +135,47 @@ def power_chart(pred: pd.DataFrame, actual: pd.Series | None, title: str) -> go.
                                  line=dict(color=INK, width=2), name="Факт",
                                  hovertemplate="%{x|%d.%m %H:%M}<br>факт %{y:.3f}<extra></extra>"))
     fig.update_layout(
-        title=dict(text=title, font=dict(size=15)), height=340,
-        margin=dict(l=8, r=8, t=44, b=8), hovermode="x unified",
+        title=dict(text=title, font=dict(size=15), x=0, xanchor="left",
+                   y=0.97, yanchor="top", yref="container"),
+        height=370, margin=dict(l=8, r=8, t=86, b=8), hovermode="x unified",
         yaxis=dict(title="норм. мощность", range=[0, 1.04], gridcolor="#EEF2F7"),
-        xaxis=dict(gridcolor="#EEF2F7"), plot_bgcolor="white", paper_bgcolor="white",
-        legend=dict(orientation="h", y=1.14, x=0, font=dict(size=11)),
+        xaxis=dict(gridcolor="#EEF2F7", tickformat="%d.%m %H:%M"), plot_bgcolor="white", paper_bgcolor="white",
+        legend=dict(orientation="h", y=1.02, yanchor="bottom", x=0, font=dict(size=11)),
         font=dict(family="system-ui", color=INK))
     return fig
 
 
 def wind_chart(slice_: pd.DataFrame) -> go.Figure:
-    cols = [c for c in slice_.columns if c.endswith("wind_speed_100m")
-            or c.endswith("wind_speed_10m")]
+    """По одной кривой на источник: высота ступицы (100 м), иначе лучшее доступное.
+
+    Часть моделей отдаёт и 100 м, и 10 м — без выбора источник попадал бы в легенду дважды.
+    """
+    sources = sorted({c.split("__")[0] for c in slice_.columns if "__" in c})
+    cols: dict[str, str] = {}
+    for src in sources:
+        for var in ("wind_speed_100m", "wind_speed_120m", "wind_speed_80m", "wind_speed_10m"):
+            col = f"{src}__{var}"
+            if col in slice_.columns and slice_[col].notna().any():
+                cols[f"{src} ({var.rsplit('_', 1)[1]})"] = col
+                break
+
     fig = go.Figure()
-    for c in cols:
-        src = c.split("__")[0]
-        fig.add_trace(go.Scatter(x=slice_.index, y=slice_[c], mode="lines", name=src,
+    for label, col in cols.items():
+        fig.add_trace(go.Scatter(x=slice_.index, y=slice_[col], mode="lines", name=label,
                                  line=dict(width=1.3, color=MUTED), opacity=.55,
-                                 hovertemplate=f"{src}: %{{y:.1f}} м/с<extra></extra>"))
+                                 hovertemplate=f"{label}: %{{y:.1f}} м/с<extra></extra>"))
     if cols:
-        fig.add_trace(go.Scatter(x=slice_.index, y=slice_[cols].mean(axis=1), mode="lines",
-                                 name="среднее ансамбля", line=dict(color=ACCENT, width=2.4),
+        fig.add_trace(go.Scatter(x=slice_.index, y=slice_[list(cols.values())].mean(axis=1),
+                                 mode="lines", name="среднее ансамбля",
+                                 line=dict(color=ACCENT, width=2.4),
                                  hovertemplate="ансамбль: %{y:.1f} м/с<extra></extra>"))
     fig.update_layout(
-        title=dict(text="Прогноз ветра: ансамбль NWP-источников", font=dict(size=15)),
-        height=300, margin=dict(l=8, r=8, t=44, b=8), hovermode="x unified",
+        title=dict(text="Прогноз ветра: ансамбль NWP-источников", font=dict(size=15),
+                   x=0, xanchor="left", y=0.97, yanchor="top", yref="container"),
+        height=330, margin=dict(l=8, r=8, t=86, b=8), hovermode="x unified",
         yaxis=dict(title="скорость ветра, м/с", gridcolor="#EEF2F7"),
-        xaxis=dict(gridcolor="#EEF2F7"), plot_bgcolor="white", paper_bgcolor="white",
-        legend=dict(orientation="h", y=1.16, x=0, font=dict(size=10)),
+        xaxis=dict(gridcolor="#EEF2F7", tickformat="%d.%m %H:%M"), plot_bgcolor="white", paper_bgcolor="white",
+        legend=dict(orientation="h", y=1.02, yanchor="bottom", x=0, font=dict(size=10)),
         font=dict(family="system-ui", color=INK))
     return fig
 
