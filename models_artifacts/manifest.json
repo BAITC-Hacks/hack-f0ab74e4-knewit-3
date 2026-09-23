@@ -292,6 +292,17 @@
         "submission_rows": 1344,
         "evaluation_rows": 5904,
         "all_eight_checks_passed": true
+      },
+      "linux_x86_64": {
+        "ok": true,
+        "duration_s": 69.0,
+        "execution": "linux/amd64 image under local emulation",
+        "absolute_tolerance": 1e-09,
+        "forecast_max_deviation": 0.0,
+        "evaluation_max_deviation": 1.1102230246251565e-16,
+        "submission_rows": 1344,
+        "evaluation_rows": 5904,
+        "all_eight_checks_passed": true
       }
     },
     "ui": {
