@@ -1,6 +1,6 @@
 {
  "issue_date": "2026-02-07",
- "mode": "openai",
+ "mode": "no-llm",
  "completed": true,
  "next_tool": null,
  "validation_ok": true,
@@ -12,7 +12,7 @@
    "node": "fetch_weather",
    "label": "Получение архивного прогноза погоды",
    "status": "ok",
-   "ms": 11.8,
+   "ms": 2.1,
    "output": {
     "issue_date": "2026-02-07",
     "hours": 48,
@@ -38,7 +38,7 @@
    "node": "prepare_features",
    "label": "Подготовка признаков",
    "status": "ok",
-   "ms": 43.1,
+   "ms": 8.2,
    "output": {
     "rows": 48,
     "n_features": 108,
@@ -51,19 +51,19 @@
    "node": "run_model",
    "label": "Запуск моделей обеих турбин",
    "status": "ok",
-   "ms": 80.6,
+   "ms": 44.0,
    "output": {
     "turbine_1": {
      "mean": 0.748,
      "max": 0.988,
      "hours": 48,
-     "expected_energy_norm_24h": 15.23
+     "expected_energy_norm_24h": 15.21
     },
     "turbine_2": {
      "mean": 0.745,
      "max": 0.974,
      "hours": 48,
-     "expected_energy_norm_24h": 15.22
+     "expected_energy_norm_24h": 15.23
     }
    },
    "attempt": 1,
@@ -73,7 +73,7 @@
    "node": "validate_forecast",
    "label": "Физическая валидация прогноза",
    "status": "ok",
-   "ms": 1.8,
+   "ms": 0.3,
    "output": {
     "ok": true,
     "checks": {
@@ -100,18 +100,18 @@
    "node": "compare_with_previous",
    "label": "Сравнение с прошлым запуском",
    "status": "ok",
-   "ms": 15.0,
+   "ms": 2.9,
    "output": {
     "turbine_1": {
      "hours_overlap": 24,
-     "mean_abs_update": 0.048,
-     "max_abs_update": 0.182,
+     "mean_abs_update": 0.049,
+     "max_abs_update": 0.193,
      "significant_update": false
     },
     "turbine_2": {
      "hours_overlap": 24,
-     "mean_abs_update": 0.057,
-     "max_abs_update": 0.173,
+     "mean_abs_update": 0.055,
+     "max_abs_update": 0.189,
      "significant_update": false
     }
    },
@@ -122,7 +122,7 @@
    "node": "write_outputs",
    "label": "Запись прогноза и отчёта",
    "status": "ok",
-   "ms": 13.6,
+   "ms": 2.4,
    "output": {
     "files": [
      "forecast_t1_2026-02-07.csv",

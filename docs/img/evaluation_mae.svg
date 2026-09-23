@@ -1,1 +1,266 @@
-<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='360' viewBox='0 0 1200 360' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif'><rect x='0.5' y='0.5' width='1199' height='359' rx='10' fill='#fcfcfb' stroke='#e6e5e1'/><text x='64' y='26' font-size='17' fill='#0b0b0b' text-anchor='start' font-weight='600' >Ретроспективная оценка ансамбля: MAE по турбинам и горизонтам</text><text x='64' y='46' font-size='12' fill='#52514e' text-anchor='start' font-weight='normal' >Период оценки 01.12.2025–31.01.2026 · модели обучены по 30.11.2025 · чистые цели (без простоев) · n = 5764 часов-выпусков · models_artifacts/evaluation/</text><line x1='64' y1='310.0' x2='1176' y2='310.0' stroke='#e6e5e1'/><text x='56' y='314.0' font-size='11' fill='#52514e' text-anchor='end' font-weight='normal' >0.00</text><line x1='64' y1='262.0' x2='1176' y2='262.0' stroke='#e6e5e1'/><text x='56' y='266.0' font-size='11' fill='#52514e' text-anchor='end' font-weight='normal' >0.05</text><line x1='64' y1='214.0' x2='1176' y2='214.0' stroke='#e6e5e1'/><text x='56' y='218.0' font-size='11' fill='#52514e' text-anchor='end' font-weight='normal' >0.10</text><line x1='64' y1='166.0' x2='1176' y2='166.0' stroke='#e6e5e1'/><text x='56' y='170.0' font-size='11' fill='#52514e' text-anchor='end' font-weight='normal' >0.15</text><line x1='64' y1='118.0' x2='1176' y2='118.0' stroke='#e6e5e1'/><text x='56' y='122.0' font-size='11' fill='#52514e' text-anchor='end' font-weight='normal' >0.20</text><line x1='64' y1='70.0' x2='1176' y2='70.0' stroke='#e6e5e1'/><text x='56' y='74.0' font-size='11' fill='#52514e' text-anchor='end' font-weight='normal' >0.25</text><rect x='118.0' y='139.5' width='84' height='170.5' rx='4' fill='#b8b6ad'/><text x='160.0' y='133.5270829952736' font-size='12' fill='#0b0b0b' text-anchor='middle' font-weight='600' >0.1776</text><rect x='204.0' y='158.9' width='84' height='151.1' rx='4' fill='#2a78d6'/><text x='246.0' y='152.90364791554956' font-size='12' fill='#0b0b0b' text-anchor='middle' font-weight='600' >0.1574</text><text x='203.0' y='328' font-size='13' fill='#0b0b0b' text-anchor='middle' font-weight='600' >Т1 · 0–24 ч</text><text x='203.0' y='344' font-size='11' fill='#52514e' text-anchor='middle' font-weight='normal' >−11.4% к физической кривой мощности · n=1468</text><rect x='396.0' y='125.4' width='84' height='184.6' rx='4' fill='#b8b6ad'/><text x='438.0' y='119.42825901348758' font-size='12' fill='#0b0b0b' text-anchor='middle' font-weight='600' >0.1923</text><rect x='482.0' y='144.0' width='84' height='166.0' rx='4' fill='#2a78d6'/><text x='524.0' y='137.98831720875012' font-size='12' fill='#0b0b0b' text-anchor='middle' font-weight='600' >0.1729</text><text x='481.0' y='328' font-size='13' fill='#0b0b0b' text-anchor='middle' font-weight='600' >Т1 · 24–48 ч</text><text x='481.0' y='344' font-size='11' fill='#52514e' text-anchor='middle' font-weight='normal' >−10.1% к физической кривой мощности · n=1444</text><rect x='674.0' y='138.0' width='84' height='172.0' rx='4' fill='#b8b6ad'/><text x='716.0' y='131.95379898311742' font-size='12' fill='#0b0b0b' text-anchor='middle' font-weight='600' >0.1792</text><rect x='760.0' y='158.9' width='84' height='151.1' rx='4' fill='#2a78d6'/><text x='802.0' y='152.86174377432076' font-size='12' fill='#0b0b0b' text-anchor='middle' font-weight='600' >0.1574</text><text x='759.0' y='328' font-size='13' fill='#0b0b0b' text-anchor='middle' font-weight='600' >Т2 · 0–24 ч</text><text x='759.0' y='344' font-size='11' fill='#52514e' text-anchor='middle' font-weight='normal' >−12.2% к физической кривой мощности · n=1438</text><rect x='952.0' y='123.8' width='84' height='186.2' rx='4' fill='#b8b6ad'/><text x='994.0' y='117.7832496277484' font-size='12' fill='#0b0b0b' text-anchor='middle' font-weight='600' >0.1940</text><rect x='1038.0' y='143.5' width='84' height='166.5' rx='4' fill='#2a78d6'/><text x='1080.0' y='137.50828055127187' font-size='12' fill='#0b0b0b' text-anchor='middle' font-weight='600' >0.1734</text><text x='1037.0' y='328' font-size='13' fill='#0b0b0b' text-anchor='middle' font-weight='600' >Т2 · 24–48 ч</text><text x='1037.0' y='344' font-size='11' fill='#52514e' text-anchor='middle' font-weight='normal' >−10.6% к физической кривой мощности · n=1414</text><rect x='876' y='58' width='14' height='14' rx='3' fill='#b8b6ad'/><text x='896' y='70' font-size='11' fill='#52514e' text-anchor='start' font-weight='normal' >изотоническая кривая мощности (baseline)</text><rect x='876' y='78' width='14' height='14' rx='3' fill='#2a78d6'/><text x='896' y='90' font-size='11' fill='#52514e' text-anchor='start' font-weight='normal' >LightGBM×5 (оценочный ансамбль)</text></svg>
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="864pt" height="302.4pt" viewBox="0 0 864 302.4" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:description>models_artifacts/evaluation/evaluation_report.json; clean_targets.</dc:description>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.11.2, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 302.4
+L 864 302.4
+L 864 0
+L 0 0
+z
+" style="fill: #fcfcfb"/>
+  </g>
+  <g id="axes_1">
+   <g id="patch_2">
+    <path d="M 64.8 247.968
+L 838.08 247.968
+L 838.08 57.456
+L 64.8 57.456
+z
+" style="fill: #fcfcfb"/>
+   </g>
+   <g id="matplotlib.axis_1">
+    <g id="xtick_1">
+     <g id="line2d_1"/>
+     <g id="text_1">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans'; fill: #52514e" transform="translate(139.970809 260.067414)">Т1 · lead 1</text>
+      <text style="font-size: 10px; font-family: 'DejaVu Sans'; fill: #52514e" transform="translate(146.363777 272.069367)">n=1468</text>
+     </g>
+    </g>
+    <g id="xtick_2">
+     <g id="line2d_2"/>
+     <g id="text_2">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans'; fill: #52514e" transform="translate(329.965895 260.067414)">Т1 · lead 2</text>
+      <text style="font-size: 10px; font-family: 'DejaVu Sans'; fill: #52514e" transform="translate(336.358863 272.069367)">n=1444</text>
+     </g>
+    </g>
+    <g id="xtick_3">
+     <g id="line2d_3"/>
+     <g id="text_3">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans'; fill: #52514e" transform="translate(519.96098 260.067414)">Т2 · lead 1</text>
+      <text style="font-size: 10px; font-family: 'DejaVu Sans'; fill: #52514e" transform="translate(526.353949 272.069367)">n=1438</text>
+     </g>
+    </g>
+    <g id="xtick_4">
+     <g id="line2d_4"/>
+     <g id="text_4">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans'; fill: #52514e" transform="translate(709.956066 260.067414)">Т2 · lead 2</text>
+      <text style="font-size: 10px; font-family: 'DejaVu Sans'; fill: #52514e" transform="translate(716.349035 272.069367)">n=1414</text>
+     </g>
+    </g>
+   </g>
+   <g id="matplotlib.axis_2">
+    <g id="ytick_1">
+     <g id="line2d_5">
+      <path d="M 64.8 247.968
+L 838.08 247.968
+" clip-path="url(#pc8cf503927)" style="fill: none; stroke: #e6e5e1; stroke-width: 0.8; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_6"/>
+     <g id="text_5">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: end; fill: #52514e" x="61.3" y="251.766828" transform="rotate(-0 61.3 251.766828)">0.00</text>
+     </g>
+    </g>
+    <g id="ytick_2">
+     <g id="line2d_7">
+      <path d="M 64.8 209.8656
+L 838.08 209.8656
+" clip-path="url(#pc8cf503927)" style="fill: none; stroke: #e6e5e1; stroke-width: 0.8; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_8"/>
+     <g id="text_6">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: end; fill: #52514e" x="61.3" y="213.664428" transform="rotate(-0 61.3 213.664428)">0.05</text>
+     </g>
+    </g>
+    <g id="ytick_3">
+     <g id="line2d_9">
+      <path d="M 64.8 171.7632
+L 838.08 171.7632
+" clip-path="url(#pc8cf503927)" style="fill: none; stroke: #e6e5e1; stroke-width: 0.8; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_10"/>
+     <g id="text_7">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: end; fill: #52514e" x="61.3" y="175.562028" transform="rotate(-0 61.3 175.562028)">0.10</text>
+     </g>
+    </g>
+    <g id="ytick_4">
+     <g id="line2d_11">
+      <path d="M 64.8 133.6608
+L 838.08 133.6608
+" clip-path="url(#pc8cf503927)" style="fill: none; stroke: #e6e5e1; stroke-width: 0.8; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_12"/>
+     <g id="text_8">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: end; fill: #52514e" x="61.3" y="137.459628" transform="rotate(-0 61.3 137.459628)">0.15</text>
+     </g>
+    </g>
+    <g id="ytick_5">
+     <g id="line2d_13">
+      <path d="M 64.8 95.5584
+L 838.08 95.5584
+" clip-path="url(#pc8cf503927)" style="fill: none; stroke: #e6e5e1; stroke-width: 0.8; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_14"/>
+     <g id="text_9">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: end; fill: #52514e" x="61.3" y="99.357228" transform="rotate(-0 61.3 99.357228)">0.20</text>
+     </g>
+    </g>
+    <g id="ytick_6">
+     <g id="line2d_15">
+      <path d="M 64.8 57.456
+L 838.08 57.456
+" clip-path="url(#pc8cf503927)" style="fill: none; stroke: #e6e5e1; stroke-width: 0.8; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_16"/>
+     <g id="text_10">
+      <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: end; fill: #52514e" x="61.3" y="61.254828" transform="rotate(-0 61.3 61.254828)">0.25</text>
+     </g>
+    </g>
+    <g id="text_11">
+     <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle" x="32.632031" y="152.712" transform="rotate(-90 32.632031 152.712)">MAE, доля номинала</text>
+    </g>
+   </g>
+   <g id="patch_3">
+    <path d="M 99.949091 247.968
+L 164.54742 247.968
+L 164.54742 112.647977
+L 99.949091 112.647977
+z
+" clip-path="url(#pc8cf503927)" style="fill: #b8b6ad"/>
+   </g>
+   <g id="patch_4">
+    <path d="M 289.944177 247.968
+L 354.542506 247.968
+L 354.542506 101.45051
+L 289.944177 101.45051
+z
+" clip-path="url(#pc8cf503927)" style="fill: #b8b6ad"/>
+   </g>
+   <g id="patch_5">
+    <path d="M 479.939263 247.968
+L 544.537592 247.968
+L 544.537592 111.395253
+L 479.939263 111.395253
+z
+" clip-path="url(#pc8cf503927)" style="fill: #b8b6ad"/>
+   </g>
+   <g id="patch_6">
+    <path d="M 669.934349 247.968
+L 734.532678 247.968
+L 734.532678 100.152555
+L 669.934349 100.152555
+z
+" clip-path="url(#pc8cf503927)" style="fill: #b8b6ad"/>
+   </g>
+   <g id="patch_7">
+    <path d="M 168.347322 247.968
+L 232.945651 247.968
+L 232.945651 127.475249
+L 168.347322 127.475249
+z
+" clip-path="url(#pc8cf503927)" style="fill: #2a78d6"/>
+   </g>
+   <g id="patch_8">
+    <path d="M 358.342408 247.968
+L 422.940737 247.968
+L 422.940737 115.909136
+L 358.342408 115.909136
+z
+" clip-path="url(#pc8cf503927)" style="fill: #2a78d6"/>
+   </g>
+   <g id="patch_9">
+    <path d="M 548.337494 247.968
+L 612.935823 247.968
+L 612.935823 127.499531
+L 548.337494 127.499531
+z
+" clip-path="url(#pc8cf503927)" style="fill: #2a78d6"/>
+   </g>
+   <g id="patch_10">
+    <path d="M 738.33258 247.968
+L 802.930909 247.968
+L 802.930909 115.122828
+L 738.33258 115.122828
+z
+" clip-path="url(#pc8cf503927)" style="fill: #2a78d6"/>
+   </g>
+   <g id="text_12">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #202522" x="132.248256" y="106.245634" transform="rotate(-0 132.248256 106.245634)">0.1776</text>
+   </g>
+   <g id="text_13">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #202522" x="322.243342" y="95.048167" transform="rotate(-0 322.243342 95.048167)">0.1923</text>
+   </g>
+   <g id="text_14">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #202522" x="512.238428" y="104.992909" transform="rotate(-0 512.238428 104.992909)">0.1792</text>
+   </g>
+   <g id="text_15">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #202522" x="702.233514" y="93.750211" transform="rotate(-0 702.233514 93.750211)">0.1940</text>
+   </g>
+   <g id="text_16">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #202522" x="200.646486" y="121.072905" transform="rotate(-0 200.646486 121.072905)">0.1581</text>
+   </g>
+   <g id="text_17">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #202522" x="390.641572" y="109.506793" transform="rotate(-0 390.641572 109.506793)">0.1733</text>
+   </g>
+   <g id="text_18">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #202522" x="580.636658" y="121.097187" transform="rotate(-0 580.636658 121.097187)">0.1581</text>
+   </g>
+   <g id="text_19">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #202522" x="770.631744" y="108.720485" transform="rotate(-0 770.631744 108.720485)">0.1743</text>
+   </g>
+   <g id="legend_1">
+    <g id="patch_11">
+     <path d="M 592.244062 74.054437
+L 612.244062 74.054437
+L 612.244062 67.054437
+L 592.244062 67.054437
+z
+" style="fill: #b8b6ad"/>
+    </g>
+    <g id="text_20">
+     <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #202522" x="620.244062" y="74.054437" transform="rotate(-0 620.244062 74.054437)">Кривая мощности</text>
+    </g>
+    <g id="patch_12">
+     <path d="M 734.965937 74.054437
+L 754.965937 74.054437
+L 754.965937 67.054437
+L 734.965937 67.054437
+z
+" style="fill: #2a78d6"/>
+    </g>
+    <g id="text_21">
+     <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #202522" x="762.965937" y="74.054437" transform="rotate(-0 762.965937 74.054437)">LightGBM ×5</text>
+    </g>
+   </g>
+  </g>
+  <g id="text_22">
+   <text style="font-weight: 700; font-size: 15px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #202522" x="64.8" y="17.9355" transform="rotate(-0 64.8 17.9355)">Ретроспективная оценка ансамбля</text>
+  </g>
+  <g id="text_23">
+   <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #52514e" x="64.8" y="40.824" transform="rotate(-0 64.8 40.824)">2025-12-01 – 2026-01-31 · обучение по 2025-11-30 · 5764 чистые цели</text>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="pc8cf503927">
+   <rect x="64.8" y="57.456" width="773.28" height="190.512"/>
+  </clipPath>
+ </defs>
+</svg>

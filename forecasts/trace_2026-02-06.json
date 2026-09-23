@@ -1,6 +1,6 @@
 {
  "issue_date": "2026-02-06",
- "mode": "openai",
+ "mode": "no-llm",
  "completed": true,
  "next_tool": null,
  "validation_ok": true,
@@ -12,7 +12,7 @@
    "node": "fetch_weather",
    "label": "Получение архивного прогноза погоды",
    "status": "ok",
-   "ms": 13.0,
+   "ms": 2.3,
    "output": {
     "issue_date": "2026-02-06",
     "hours": 48,
@@ -38,7 +38,7 @@
    "node": "prepare_features",
    "label": "Подготовка признаков",
    "status": "ok",
-   "ms": 37.1,
+   "ms": 7.5,
    "output": {
     "rows": 48,
     "n_features": 108,
@@ -51,19 +51,19 @@
    "node": "run_model",
    "label": "Запуск моделей обеих турбин",
    "status": "ok",
-   "ms": 91.5,
+   "ms": 46.2,
    "output": {
     "turbine_1": {
-     "mean": 0.467,
+     "mean": 0.469,
      "max": 0.988,
      "hours": 48,
-     "expected_energy_norm_24h": 7.63
+     "expected_energy_norm_24h": 7.68
     },
     "turbine_2": {
-     "mean": 0.471,
-     "max": 0.974,
+     "mean": 0.47,
+     "max": 0.975,
      "hours": 48,
-     "expected_energy_norm_24h": 7.78
+     "expected_energy_norm_24h": 7.75
     }
    },
    "attempt": 1,
@@ -73,7 +73,7 @@
    "node": "validate_forecast",
    "label": "Физическая валидация прогноза",
    "status": "ok",
-   "ms": 1.0,
+   "ms": 0.2,
    "output": {
     "ok": true,
     "checks": {
@@ -100,18 +100,18 @@
    "node": "compare_with_previous",
    "label": "Сравнение с прошлым запуском",
    "status": "ok",
-   "ms": 14.3,
+   "ms": 2.6,
    "output": {
     "turbine_1": {
      "hours_overlap": 24,
      "mean_abs_update": 0.085,
-     "max_abs_update": 0.24,
+     "max_abs_update": 0.233,
      "significant_update": true
     },
     "turbine_2": {
      "hours_overlap": 24,
-     "mean_abs_update": 0.086,
-     "max_abs_update": 0.276,
+     "mean_abs_update": 0.088,
+     "max_abs_update": 0.279,
      "significant_update": true
     }
    },
@@ -122,7 +122,7 @@
    "node": "write_outputs",
    "label": "Запись прогноза и отчёта",
    "status": "ok",
-   "ms": 16.9,
+   "ms": 2.3,
    "output": {
     "files": [
      "forecast_t1_2026-02-06.csv",

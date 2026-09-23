@@ -20,7 +20,9 @@ BLUE, GREY = "#2a78d6", "#b8b6ad"
 
 
 def _save(fig, name, source):
-    fig.savefig(OUT / f"{name}.svg", metadata={"Date": None, "Description": source})
+    path = OUT / f"{name}.svg"
+    fig.savefig(path, metadata={"Date": None, "Description": source})
+    path.write_text("\n".join(line.rstrip() for line in path.read_text().splitlines()) + "\n")
     plt.close(fig)
 
 
@@ -106,6 +108,7 @@ def main():
     axes[0].legend(frameon=False, loc="upper right", ncol=2)
     axes[1].xaxis.set_major_locator(mdates.DayLocator(interval=4))
     axes[1].xaxis.set_major_formatter(mdates.DateFormatter("%d.%m"))
+    axes[1].set_xlim(forecasts.datetime.min(), forecasts.datetime.max())
     fig.suptitle(f"Подача: февраль 2026 · {len(forecasts)} turbine-hours",
                  x=.075, ha="left", fontsize=15, fontweight="bold")
     fig.text(.075, .9, "Прогноз свежайшего выпуска (lead 1) · фактическая выработка февраля недоступна",

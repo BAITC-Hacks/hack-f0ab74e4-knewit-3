@@ -8,7 +8,7 @@
 [![LightGBM](https://img.shields.io/badge/LightGBM-4.7-2E8B57)](src/models/train.py)
 [![Open-Meteo](https://img.shields.io/badge/Open--Meteo-Previous%20Runs%20API-1D5FD6)](src/weather/openmeteo.py)
 [![LLM](https://img.shields.io/badge/LLM-OpenAI%20gpt--6--luna-412991?logo=openai&logoColor=white)](src/agent/llm.py)
-[![Tests](https://img.shields.io/badge/pytest-69%20passed-18734A)](tests/)
+[![Tests](https://img.shields.io/badge/pytest-145%20passed-18734A)](tests/)
 [![Submission](https://img.shields.io/badge/submission-1344%20turbine--hours-1D5FD6)](forecasts/submission.csv)
 [![Docker](https://img.shields.io/badge/Docker-compose-2496ED?logo=docker&logoColor=white)](docker-compose.yml)
 
@@ -56,7 +56,7 @@ The submission for 1–28 February 2026 (`forecasts/submission.csv`, 1344 turbin
 An LLM (OpenAI `gpt-6-luna` by default; Claude / NVIDIA NIM
 supported) orchestrates typed tools through a shared state graph; `--no-llm` executes the identical graph
 deterministically, so judges can reproduce the forecasts offline without keys. Retrospective evaluation
-(models trained through 30 Nov 2025, evaluated Dec 2025–Jan 2026): MAE 0.157 (0–24 h) / 0.173 (24–48 h)
+(models trained through 30 Nov 2025, evaluated Dec 2025–Jan 2026): MAE 0.158 (0–24 h) / 0.173–0.174 (24–48 h)
 of rated capacity on eligible targets, approximately 10–12 % lower than the power-curve baseline.
 These months previously informed model choices; this is not an untouched test. February ground truth is held
 by the organisers. Historical availability at a fixed issue time remains unverified: Previous Runs stitches
@@ -66,8 +66,6 @@ model runs, and publication delays can push some fields beyond day D. The CLI ha
 
 ## 📌 Статус проекта
 
-<!-- Обновлять при каждом изменении состояния. Столбец «Подтверждение» — файл или команда, а не слова. -->
-
 | Компонент | Статус | Подтверждение |
 | --- | --- | --- |
 | Подача за февраль 2026 (28 выпусков, 1344 строки) | ✅ готова | [`forecasts/submission.csv`](forecasts/submission.csv), `python -m scripts.verify_submission` |
@@ -76,15 +74,15 @@ model runs, and publication delays can push some fields beyond day D. The CLI ha
 | Агентный граф: LLM и `--no-llm`, восстановление, трассы | ✅ готов | [`src/agent/graph.py`](src/agent/graph.py), [`tests/test_agent_graph.py`](tests/test_agent_graph.py) |
 | Панель оператора (Streamlit) | ✅ работает | `streamlit run app.py`, [`tests/test_app_smoke.py`](tests/test_app_smoke.py) |
 | Воспроизведение из чистого клона без сети | ✅ проверено командой | [`docs/INTEGRATION.md`](docs/INTEGRATION.md#чистый-клон), [`manifest.json`](models_artifacts/manifest.json) |
-| Тесты (`pytest tests/ -q`) | ✅ 69 passed | [`tests/`](tests/) |
-| Канонический LLM-прогон: 28/28 трасс, `mode=openai`, `fallback=false`; GPT-6 Luna указан автором коммита | ✅ сохранён | [`forecasts/trace_*.json`](forecasts/), [происхождение](docs/INTEGRATION.md#канонические-llm-отчёты-4e6f7ce); model ID в трассах отсутствует |
-| Контейнерная репетиция релиза в Linux (Docker из чистого клона) | 🔄 отдельная проверка | [`docs/NEXT_STEPS.md`](docs/NEXT_STEPS.md) |
-| Калибровка интервалов P10–P90 (покрытие 65 % при номинале 80 %) | ⬜ открытая задача | [`evaluation_report.json`](models_artifacts/evaluation/evaluation_report.json) |
+| Тесты (`pytest tests/ -q`) | ✅ 145 passed | [`tests/`](tests/) |
+| Текущий комплект после переобучения: 28/28 завершённых offline-трасс | ✅ сохранён | [`forecasts/`](forecasts/), [`manifest.json`](models_artifacts/manifest.json); прежний LLM-прогон сохранён в [истории](https://github.com/BAITC-Hacks/hack-f0ab74e4-knewit-3/tree/4e6f7ce/forecasts) |
+| Контейнерная репетиция релиза в Linux без сети | Проверки и команды | [`docs/REPRODUCIBILITY.md`](docs/REPRODUCIBILITY.md); GitHub Actions заблокирован биллингом организации |
+| Калибровка интервалов P10–P90 (покрытие 64.3 % при номинале 80 %) | ⬜ открытая задача | [`evaluation_report.json`](models_artifacts/evaluation/evaluation_report.json) |
 
 ## ⚡ Судьям: проверка за 5 минут
 
 Всё нужное лежит в репозитории: данные организаторов, кэш всех погодных запросов, обученные модели,
-готовая подача (получена с реальным LLM-агентом, см. [статус](#-статус-проекта)). После установки
+готовая подача и шаблонные отчёты нового offline-прогона. После установки
 зависимостей сеть и API-ключи **не нужны**: режим `--no-llm` даёт те же числа прогноза.
 
 ```bash
@@ -100,7 +98,7 @@ python -m scripts.verify_submission --directory runs/judge-check
 python -m scripts.compare_runs --a forecasts --b runs/judge-check   # ожидается совпадение чисел
 
 # 3) Тесты и панель оператора
-python -m pytest tests/ -q                            # ожидается: 69 passed
+python -m pytest tests/ -q                            # ожидается: 145 passed
 streamlit run app.py -- --forecast-dir runs/judge-check              # http://localhost:8501
 ```
 
@@ -122,13 +120,12 @@ python -c "import json;t=json.load(open('runs/demo/trace_2026-02-10.json'));prin
 если тот есть в том же каталоге (`mean_abs_update`, `significant_update`), и пишет CSV + отчёт + трассу.
 В отдельном однодневном запуске выше предыдущего выпуска нет. Эталонная трасса этого дня из
 канонического прогона: [`forecasts/trace_2026-02-10.json`](forecasts/trace_2026-02-10.json) —
-шесть узлов, все `ok`, `mode=openai`, `completed=true`, `fallback=false`; точный model ID в ней не записан.
+шесть узлов, все `ok`, `mode=no-llm`, `completed=true`, `fallback=false`.
+После переобучения старые LLM-тексты не переносились к новым числам; [прежний запуск](docs/INTEGRATION.md#канонические-llm-отчёты-4e6f7ce) сохранён в истории.
 
 </details>
 
 ## ✅ Соответствие ТЗ: матрица трассируемости
-
-<!-- Каждое требование ТЗ (docs/CASE.md) → где реализовано → как проверить. Добавляя функцию, добавьте строку. -->
 
 | # | Требование ТЗ ([`docs/CASE.md`](docs/CASE.md)) | Где реализовано | Как убедиться |
 | --- | --- | --- | --- |
@@ -160,7 +157,7 @@ python -c "import json;t=json.load(open('runs/demo/trace_2026-02-10.json'));prin
 - **Архивный погодный вход**: используются прогнозные поля Previous Runs, измеренный ветер и ERA5 в инференс не входят. Историческое время публикации каждого значения требует отдельного подтверждения.
 - **MOS + зависимость мощности от ветра**: LightGBM учится по прогнозной погоде и фактической мощности, учитывая их статистическую связь. Обучение и инференс используют одинаковое построение признаков; равенство распределений этим не доказано.
 - **Пять источников NWP** (ECMWF IFS, NCEP GFS, DWD ICON, UKMO, Open-Meteo best_match) + согласие/разброс как признаки; ветер на доступных высотах 10/80/100/120 м, куб скорости, плотность воздуха ρ = p/(R·T), сдвиг ветра, направление, лаги/окна внутри среза, календарь, lead time. `best_match` — автоматический выбор источника, поэтому пять входов не означают пять независимых центров.
-- **LLM управляет инструментами и составляет отчёт**: все 28 трасс имеют `mode=openai` и `fallback=false`; точный model ID не сохранён. Числа прогнозов совпадают с `--no-llm` при допуске 1e-9 (`scripts/compare_runs`); модель GPT-6 Luna указана автором коммита [4e6f7ce](docs/INTEGRATION.md#канонические-llm-отчёты-4e6f7ce).
+- **LLM управляет инструментами и составляет отчёт**: в [запуске 4e6f7ce](docs/INTEGRATION.md#канонические-llm-отчёты-4e6f7ce) все 28 трасс имели `mode=openai` и `fallback=false`; точный model ID не сохранялся. Текущий комплект переобучен и выпущен в `--no-llm`. Новый вызов LLM проверяется отдельно владельцем ключа.
 - **Агент как граф состояний**, а не свободный цикл: допустимый следующий инструмент задаёт граф, LLM анализирует и пишет отчёт; сбой API продолжает день с сохранённого узла без повторных расчётов; каждый шаг — в `trace_*.json`.
 - **Протокол оценки** с хронологией fit → tune → evaluate и replay по датам выпуска ([`src/backtest/evaluate.py`](src/backtest/evaluate.py)); метрики пересчитываются из сохранённого CSV.
 - Заявленная логика = фактическая: контракты модулей в [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), решения и **отрицательные результаты** в [`docs/DECISIONS.md`](docs/DECISIONS.md) (11 ADR).
@@ -173,7 +170,7 @@ python -c "import json;t=json.load(open('runs/demo/trace_2026-02-10.json'));prin
 - Зависимости закреплены до версии ([`requirements.txt`](requirements.txt)); версии, SHA256 исходников, данных, моделей и результатов — в [`models_artifacts/manifest.json`](models_artifacts/manifest.json).
 - Данные, погодный кэш (76 JSON), модели и подача закоммичены: прогон без сети и без ключей.
 - Свой прогон — в `runs/<имя>` (`--output-dir`): канонические результаты не перезаписываются; сравнение — `scripts/compare_runs`.
-- 69 автотестов: граф агента, LLM-адаптеры, CLI, протокол оценки, равенство признаков, пропуски погоды, отсечка обучения, верификатор, панель.
+- 145 автотестов: граф агента, LLM-адаптеры, CLI, протокол оценки, равенство признаков, пропуски погоды, отсечка обучения, верификатор, панель.
 - Маршрут проверки для судей: [`docs/JUDGE_GUIDE.md`](docs/JUDGE_GUIDE.md); Docker: `docker compose up --build`.
 
 </details>
@@ -206,9 +203,9 @@ python -c "import json;t=json.load(open('runs/demo/trace_2026-02-10.json'));prin
 `forecasts/submission.csv` — 1344 строки (`turbine, datetime, lead_day, power_pred`), время в шкале Asia/Almaty
 как в датасете. На каждый час взят прогноз свежайшего доступного выпуска, поэтому в подаче `lead_day = 1`;
 lead-2 прогнозы тех же часов лежат в дневных CSV и используются для сравнения изменений мощности.
-Средняя прогнозная загрузка за месяц: T1 0.465, T2 0.463 номинала.
+Средняя прогнозная загрузка за месяц: T1 0.465, T2 0.462 номинала.
 
-### Ретроспективная оценка ансамбля (честные числа)
+### Ретроспективная оценка ансамбля
 
 ![MAE ансамбля против физической кривой мощности по турбинам и горизонтам](docs/img/evaluation_mae.svg)
 
@@ -216,17 +213,17 @@ lead-2 прогнозы тех же часов лежат в дневных CSV 
 что и подача (`get_issued_forecast → build_features → predict`). Таблица использует **`clean_targets`**:
 известные цели с ≥4 из 6 десятиминутных отсчётов и без эвристически выявленного простоя
 ([правила](docs/DATA.md)). MAE нормализованной мощности:
-0.157 = средняя ошибка 15.7 % установленной мощности.
+0.158 = средняя ошибка 15.8 % установленной мощности.
 
 | Турбина | Горизонт | MAE ансамбля | MAE baseline | RMSE | Часов-выпусков |
 | --- | --- | --- | --- | --- | --- |
-| 1 | 0–24 ч | **0.1574** | 0.1776 | 0.2332 | 1468 |
-| 1 | 24–48 ч | **0.1729** | 0.1923 | 0.2563 | 1444 |
-| 2 | 0–24 ч | **0.1574** | 0.1792 | 0.2341 | 1438 |
-| 2 | 24–48 ч | **0.1734** | 0.1940 | 0.2581 | 1414 |
+| 1 | 0–24 ч | **0.1581** | 0.1776 | 0.2347 | 1468 |
+| 1 | 24–48 ч | **0.1733** | 0.1923 | 0.2570 | 1444 |
+| 2 | 0–24 ч | **0.1581** | 0.1792 | 0.2351 | 1438 |
+| 2 | 24–48 ч | **0.1743** | 0.1940 | 0.2593 | 1414 |
 
 Сохранено **5904 строки**, ни одного пропущенного выпуска; 48 строк lead 2 за 01.12 исключены, потому что их
-выпуск предшествовал бы отсечке обучения. Покрытие P10–P90 — **65.0 %** при номинальных 80 %: интервалы пока
+выпуск предшествовал бы отсечке обучения. Покрытие P10–P90 — **64.3 %** при номинальных 80 %: интервалы пока
 узковаты, это открытая задача. Метрики на всех наблюдаемых часах (включая простои) — в
 [`evaluation_report.json`](models_artifacts/evaluation/evaluation_report.json).
 
@@ -242,7 +239,7 @@ lead-2 прогнозы тех же часов лежат в дневных CSV 
 | Модель | Турбина 1 | Турбина 2 |
 | --- | --- | --- |
 | Кривая мощности (изотоническая) | 0.1849 | 0.1865 |
-| **Одиночная LightGBM для настройки** | **0.1647** | **0.1662** |
+| **Одиночная LightGBM для настройки** | **0.1642** | **0.1665** |
 
 Источник: текущий [`train_report.json`](models_artifacts/train_report.json), период настройки **12.2025–01.2026**.
 Эти метрики использованы для ранней остановки и выбора веса; они не оценивают финальный ансамбль,
@@ -265,12 +262,13 @@ JMA и CMA не вошли в выбранный набор. Пространс�
 </details>
 
 <details>
-<summary><b>🖼️ Историческая иллюстрация: расчёт и факт за неделю</b></summary>
+<summary><b>🖼️ Сохранённая ретроспективная оценка за неделю</b></summary>
 
-![Историческая иллюстрация: расчёт и факт](docs/img/holdout_week.png)
+![Сохранённая ретроспективная оценка, lead 1: прогноз и факт](docs/img/holdout_week.png)
 
-Финальная модель на её обучающих датах — иллюстрация подгонки, **не** оценка точности
-(`python -m scripts.plot_holdout`).
+Сохранённая ретроспективная оценка, lead 1: прогнозы модели, обученной по 30.11.2025,
+и факт за 12–18 января. Разрывы линий обозначают границы выпусков.
+График читает оценочный CSV; финальная модель подачи здесь не используется.
 
 </details>
 
@@ -304,6 +302,10 @@ LLM (OpenAI `gpt-6-luna` по умолчанию, Claude или NVIDIA NIM — �
 
 ### Данные и обучение
 
+Обучение и прогноз округляют готовые признаки до 10 знаков после запятой. Это устраняет
+различия математических библиотек между macOS и Linux; оба комплекта моделей переобучены
+после изменения. [Проверка переносимости](docs/REPRODUCIBILITY.md#6-переносимость-признаков-и-пересборка-моделей).
+
 ```mermaid
 flowchart TB
     subgraph src["Источники"]
@@ -336,7 +338,7 @@ flowchart TB
 | [`src/agent/loop.py`](src/agent/loop.py) | Запуск дня в режиме LLM / без LLM | `run_day_llm`, `run_day_no_llm` |
 | [`src/backtest/evaluate.py`](src/backtest/evaluate.py) | Ретроспективный replay, CSV/JSON, пересчёт метрик | `--output-dir` |
 | [`src/cli.py`](src/cli.py) | `train`, `run-agent`, `check-tz`, `list-models` | защита LLM-отчётов от перезаписи, сборка `submission.csv` |
-| [`app.py`](app.py) | Панель оператора Streamlit + Plotly | `--forecast-dir` |
+| [`app.py`](app.py) | Панель оператора Streamlit + Plotly | `--forecast-dir`, `--evaluation-dir` |
 
 Подробнее — [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
@@ -346,6 +348,9 @@ flowchart TB
 интервалом P10–P90, разброс ансамбля NWP-источников, отчёт и структурированный журнал решений. Кнопка
 «Обновить результаты» перечитывает сохранённые файлы (просмотр событий, не трансляция процесса).
 Панель читает `forecasts/` либо каталог из `--forecast-dir`; незавершённый запуск скрывается.
+Режим «Ретроспективная оценка (есть факт)» читает сохранённые CSV/JSON из
+`models_artifacts/evaluation/` или `--evaluation-dir`. Он показывает отсечку обучения, lead 1/2,
+MAE, RMSE, baseline и измеренное покрытие интервала. Модели при просмотре не запускаются.
 
 ## 🚀 Запуск
 
@@ -461,7 +466,7 @@ python -m src.backtest.prof_ideas                          # двухступе�
 │   ├── report_YYYY-MM-DD.md                  ← отчёт агента оператору
 │   └── trace_YYYY-MM-DD.json                 ← трасса графа: узлы, статусы, время, next_tool
 ├── scripts/verify_submission.py · compare_runs.py · plot_holdout.py
-├── tests/                                    ← 69 тестов (см. ниже)
+├── tests/                                    ← 145 тестов (см. ниже)
 └── docs/                                     ← ТЗ, архитектура, данные, решения, оценка, маршрут судьи
 ```
 
@@ -520,7 +525,7 @@ python -m src.backtest.prof_ideas                          # двухступе�
 
 - **Точность за февраль 2026 неизвестна** — факт у организаторов. Все наши метрики ретроспективные.
 - Декабрь–январь ранее влияли на выбор источников и настроек, поэтому оценка не является нетронутым тестом.
-- **Интервалы P10–P90 недокрывают факт** (65 % при номинале 80 %) — не называть их калиброванным 80 % интервалом.
+- **Интервалы P10–P90 недокрывают факт** (64.3 % при номинале 80 %) — не называть их калиброванным 80 % интервалом.
 - Previous Runs сшивает прогнозы разных прогонов и не сохраняет время публикации каждой ячейки.
   С учётом задержки публикации часть выбранных значений может появляться уже после дня D; доступность
   **всего** среза к фиксированному часу выпуска не доказана ([`FEATURE_AVAILABILITY`](docs/FEATURE_AVAILABILITY.md)).

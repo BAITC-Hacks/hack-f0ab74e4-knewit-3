@@ -1,6 +1,6 @@
 {
  "issue_date": "2026-01-31",
- "mode": "openai",
+ "mode": "no-llm",
  "completed": true,
  "next_tool": null,
  "validation_ok": true,
@@ -12,7 +12,7 @@
    "node": "fetch_weather",
    "label": "Получение архивного прогноза погоды",
    "status": "ok",
-   "ms": 14.5,
+   "ms": 11.9,
    "output": {
     "issue_date": "2026-01-31",
     "hours": 48,
@@ -38,7 +38,7 @@
    "node": "prepare_features",
    "label": "Подготовка признаков",
    "status": "ok",
-   "ms": 26.3,
+   "ms": 9.9,
    "output": {
     "rows": 48,
     "n_features": 108,
@@ -51,19 +51,19 @@
    "node": "run_model",
    "label": "Запуск моделей обеих турбин",
    "status": "ok",
-   "ms": 799.2,
+   "ms": 1197.3,
    "output": {
     "turbine_1": {
-     "mean": 0.317,
-     "max": 0.892,
+     "mean": 0.318,
+     "max": 0.888,
      "hours": 48,
-     "expected_energy_norm_24h": 3.4
+     "expected_energy_norm_24h": 3.39
     },
     "turbine_2": {
-     "mean": 0.31,
-     "max": 0.918,
+     "mean": 0.311,
+     "max": 0.93,
      "hours": 48,
-     "expected_energy_norm_24h": 3.31
+     "expected_energy_norm_24h": 3.28
     }
    },
    "attempt": 1,
@@ -73,7 +73,7 @@
    "node": "validate_forecast",
    "label": "Физическая валидация прогноза",
    "status": "ok",
-   "ms": 1.1,
+   "ms": 0.2,
    "output": {
     "ok": true,
     "checks": {
@@ -100,7 +100,7 @@
    "node": "compare_with_previous",
    "label": "Сравнение с прошлым запуском",
    "status": "ok",
-   "ms": 0.5,
+   "ms": 0.0,
    "output": {
     "turbine_1": "нет предыдущего запуска",
     "turbine_2": "нет предыдущего запуска"
@@ -112,7 +112,7 @@
    "node": "write_outputs",
    "label": "Запись прогноза и отчёта",
    "status": "ok",
-   "ms": 15.9,
+   "ms": 3.6,
    "output": {
     "files": [
      "forecast_t1_2026-01-31.csv",

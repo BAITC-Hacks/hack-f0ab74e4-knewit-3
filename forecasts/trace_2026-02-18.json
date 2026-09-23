@@ -1,6 +1,6 @@
 {
  "issue_date": "2026-02-18",
- "mode": "openai",
+ "mode": "no-llm",
  "completed": true,
  "next_tool": null,
  "validation_ok": true,
@@ -12,7 +12,7 @@
    "node": "fetch_weather",
    "label": "Получение архивного прогноза погоды",
    "status": "ok",
-   "ms": 8.2,
+   "ms": 2.2,
    "output": {
     "issue_date": "2026-02-18",
     "hours": 48,
@@ -38,7 +38,7 @@
    "node": "prepare_features",
    "label": "Подготовка признаков",
    "status": "ok",
-   "ms": 38.3,
+   "ms": 7.4,
    "output": {
     "rows": 48,
     "n_features": 108,
@@ -51,19 +51,19 @@
    "node": "run_model",
    "label": "Запуск моделей обеих турбин",
    "status": "ok",
-   "ms": 70.2,
+   "ms": 45.1,
    "output": {
     "turbine_1": {
      "mean": 0.353,
-     "max": 0.882,
+     "max": 0.884,
      "hours": 48,
-     "expected_energy_norm_24h": 9.12
+     "expected_energy_norm_24h": 9.04
     },
     "turbine_2": {
-     "mean": 0.354,
-     "max": 0.9,
+     "mean": 0.35,
+     "max": 0.906,
      "hours": 48,
-     "expected_energy_norm_24h": 8.92
+     "expected_energy_norm_24h": 8.76
     }
    },
    "attempt": 1,
@@ -73,7 +73,7 @@
    "node": "validate_forecast",
    "label": "Физическая валидация прогноза",
    "status": "ok",
-   "ms": 0.9,
+   "ms": 0.2,
    "output": {
     "ok": true,
     "checks": {
@@ -100,18 +100,18 @@
    "node": "compare_with_previous",
    "label": "Сравнение с прошлым запуском",
    "status": "ok",
-   "ms": 13.8,
+   "ms": 2.5,
    "output": {
     "turbine_1": {
      "hours_overlap": 24,
-     "mean_abs_update": 0.102,
-     "max_abs_update": 0.293,
+     "mean_abs_update": 0.103,
+     "max_abs_update": 0.29,
      "significant_update": true
     },
     "turbine_2": {
      "hours_overlap": 24,
-     "mean_abs_update": 0.105,
-     "max_abs_update": 0.337,
+     "mean_abs_update": 0.104,
+     "max_abs_update": 0.3,
      "significant_update": true
     }
    },
@@ -122,7 +122,7 @@
    "node": "write_outputs",
    "label": "Запись прогноза и отчёта",
    "status": "ok",
-   "ms": 14.0,
+   "ms": 2.2,
    "output": {
     "files": [
      "forecast_t1_2026-02-18.csv",

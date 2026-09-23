@@ -1,6 +1,6 @@
 {
  "issue_date": "2026-02-11",
- "mode": "openai",
+ "mode": "no-llm",
  "completed": true,
  "next_tool": null,
  "validation_ok": true,
@@ -12,7 +12,7 @@
    "node": "fetch_weather",
    "label": "Получение архивного прогноза погоды",
    "status": "ok",
-   "ms": 11.2,
+   "ms": 2.2,
    "output": {
     "issue_date": "2026-02-11",
     "hours": 48,
@@ -38,7 +38,7 @@
    "node": "prepare_features",
    "label": "Подготовка признаков",
    "status": "ok",
-   "ms": 90.1,
+   "ms": 7.5,
    "output": {
     "rows": 48,
     "n_features": 108,
@@ -51,19 +51,19 @@
    "node": "run_model",
    "label": "Запуск моделей обеих турбин",
    "status": "ok",
-   "ms": 63.4,
+   "ms": 43.6,
    "output": {
     "turbine_1": {
-     "mean": 0.125,
-     "max": 0.61,
+     "mean": 0.126,
+     "max": 0.606,
      "hours": 48,
-     "expected_energy_norm_24h": 4.22
+     "expected_energy_norm_24h": 4.24
     },
     "turbine_2": {
      "mean": 0.12,
-     "max": 0.605,
+     "max": 0.591,
      "hours": 48,
-     "expected_energy_norm_24h": 4.12
+     "expected_energy_norm_24h": 4.13
     }
    },
    "attempt": 1,
@@ -73,7 +73,7 @@
    "node": "validate_forecast",
    "label": "Физическая валидация прогноза",
    "status": "ok",
-   "ms": 1.9,
+   "ms": 0.2,
    "output": {
     "ok": true,
     "checks": {
@@ -100,18 +100,18 @@
    "node": "compare_with_previous",
    "label": "Сравнение с прошлым запуском",
    "status": "ok",
-   "ms": 17.2,
+   "ms": 2.8,
    "output": {
     "turbine_1": {
      "hours_overlap": 24,
-     "mean_abs_update": 0.101,
-     "max_abs_update": 0.308,
+     "mean_abs_update": 0.097,
+     "max_abs_update": 0.311,
      "significant_update": true
     },
     "turbine_2": {
      "hours_overlap": 24,
-     "mean_abs_update": 0.103,
-     "max_abs_update": 0.332,
+     "mean_abs_update": 0.108,
+     "max_abs_update": 0.346,
      "significant_update": true
     }
    },
@@ -122,7 +122,7 @@
    "node": "write_outputs",
    "label": "Запись прогноза и отчёта",
    "status": "ok",
-   "ms": 10.9,
+   "ms": 2.3,
    "output": {
     "files": [
      "forecast_t1_2026-02-11.csv",

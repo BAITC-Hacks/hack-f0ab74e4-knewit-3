@@ -1,6 +1,6 @@
 {
  "issue_date": "2026-02-10",
- "mode": "openai",
+ "mode": "no-llm",
  "completed": true,
  "next_tool": null,
  "validation_ok": true,
@@ -12,7 +12,7 @@
    "node": "fetch_weather",
    "label": "Получение архивного прогноза погоды",
    "status": "ok",
-   "ms": 8.8,
+   "ms": 2.2,
    "output": {
     "issue_date": "2026-02-10",
     "hours": 48,
@@ -38,7 +38,7 @@
    "node": "prepare_features",
    "label": "Подготовка признаков",
    "status": "ok",
-   "ms": 34.2,
+   "ms": 8.0,
    "output": {
     "rows": 48,
     "n_features": 108,
@@ -51,19 +51,19 @@
    "node": "run_model",
    "label": "Запуск моделей обеих турбин",
    "status": "ok",
-   "ms": 77.3,
+   "ms": 54.5,
    "output": {
     "turbine_1": {
-     "mean": 0.413,
-     "max": 0.966,
+     "mean": 0.412,
+     "max": 0.967,
      "hours": 48,
-     "expected_energy_norm_24h": 13.9
+     "expected_energy_norm_24h": 13.84
     },
     "turbine_2": {
-     "mean": 0.414,
-     "max": 0.961,
+     "mean": 0.416,
+     "max": 0.958,
      "hours": 48,
-     "expected_energy_norm_24h": 14.05
+     "expected_energy_norm_24h": 14.01
     }
    },
    "attempt": 1,
@@ -73,7 +73,7 @@
    "node": "validate_forecast",
    "label": "Физическая валидация прогноза",
    "status": "ok",
-   "ms": 1.8,
+   "ms": 0.3,
    "output": {
     "ok": true,
     "checks": {
@@ -100,18 +100,18 @@
    "node": "compare_with_previous",
    "label": "Сравнение с прошлым запуском",
    "status": "ok",
-   "ms": 15.7,
+   "ms": 3.9,
    "output": {
     "turbine_1": {
      "hours_overlap": 24,
-     "mean_abs_update": 0.059,
-     "max_abs_update": 0.334,
+     "mean_abs_update": 0.06,
+     "max_abs_update": 0.298,
      "significant_update": false
     },
     "turbine_2": {
      "hours_overlap": 24,
-     "mean_abs_update": 0.055,
-     "max_abs_update": 0.317,
+     "mean_abs_update": 0.058,
+     "max_abs_update": 0.326,
      "significant_update": false
     }
    },
@@ -122,7 +122,7 @@
    "node": "write_outputs",
    "label": "Запись прогноза и отчёта",
    "status": "ok",
-   "ms": 12.6,
+   "ms": 2.6,
    "output": {
     "files": [
      "forecast_t1_2026-02-10.csv",
