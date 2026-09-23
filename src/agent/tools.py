@@ -72,11 +72,13 @@ def validate_forecast(ctx: DayContext) -> dict:
         pr = p["power_pred"]
         checks[f"turbine_{t}"] = {
             "in_bounds_0_1": bool((pr.between(0, 1)).all()),
-            "full_48h": bool(len(pr) == 48),
+            # 48 ч штатно; 24 ч допустимо на краю архива (последний день периода)
+            "hours_ok": bool(len(pr) in (24, 48)),
+            "hours": int(len(pr)),
             "has_nan": bool(pr.isna().any()),
             "flatline": bool(pr.std() < 1e-4),  # подозрительно постоянный прогноз
         }
-    ok = all(all(v for k, v in c.items() if k != "has_nan") and not c["has_nan"]
+    ok = all(c["in_bounds_0_1"] and c["hours_ok"] and not c["has_nan"] and not c["flatline"]
              for c in checks.values())
     ctx.validation = {"ok": ok, "checks": checks}
     return ctx.validation

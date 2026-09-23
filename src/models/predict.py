@@ -17,7 +17,7 @@ def load_model(turbine: int) -> dict:
 def predict(turbine: int, features: pd.DataFrame) -> pd.DataFrame:
     art = load_model(turbine)
     X = features.reindex(columns=art["features"])
-    lgb_p = np.clip(art["lgb"].predict(X), 0, 1)
+    lgb_p = np.clip(np.mean([m.predict(X) for m in art["lgbs"]], axis=0), 0, 1)
     iso_p = art["iso"].predict(X["ens_ws_mean"])
     w = art["w_lgb"]
     out = pd.DataFrame(index=features.index)

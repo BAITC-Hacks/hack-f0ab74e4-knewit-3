@@ -72,16 +72,20 @@ def train_turbine(turbine: int, weather: pd.DataFrame) -> dict:
         "best_iteration": int(model.best_iteration_ or 0),
     }
 
-    # Дообучение на train+holdout с найденным числом деревьев — финальный артефакт
-    final_params = {**LGB_PARAMS, "n_estimators": max(model.best_iteration_ or 500, 200)}
-    final = lgb.LGBMRegressor(**final_params)
-    final.fit(X, y)
+    # Дообучение на train+holdout с найденным числом деревьев — финальный артефакт.
+    # Бэггинг по сидам: среднее 5 моделей устойчивее одной (усредняет шум разбиений).
+    n_est = max(model.best_iteration_ or 500, 200)
+    finals = []
+    for seed in (1, 7, 13, 42, 99):
+        m = lgb.LGBMRegressor(**{**LGB_PARAMS, "n_estimators": n_est, "random_state": seed})
+        m.fit(X, y)
+        finals.append(m)
     iso_full = IsotonicRegression(y_min=0, y_max=1, out_of_bounds="clip")
     iso_full.fit(X["ens_ws_mean"], y)
 
     ARTIFACTS.mkdir(exist_ok=True)
     with open(ARTIFACTS / f"turbine_{turbine}.pkl", "wb") as f:
-        pickle.dump({"lgb": final, "iso": iso_full, "w_lgb": best_w,
+        pickle.dump({"lgbs": finals, "iso": iso_full, "w_lgb": best_w,
                      "features": list(X.columns)}, f)
     return report
 

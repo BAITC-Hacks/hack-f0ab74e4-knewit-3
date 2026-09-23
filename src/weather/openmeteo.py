@@ -136,9 +136,13 @@ def get_issued_forecast(issue_date: str, weather: pd.DataFrame) -> pd.DataFrame:
     rows = []
     for lead in LEAD_DAYS:
         day = d + timedelta(days=lead)
-        sel = weather.loc[str(day)]
+        sel = weather[weather.index.normalize() == pd.Timestamp(day)]
+        if sel.empty:  # день за границей архива (например 1 марта у запуска 27.02)
+            continue
         cols = {c: c.replace(f"__d{lead}", "") for c in sel.columns if c.endswith(f"__d{lead}")}
         part = sel[list(cols)].rename(columns=cols)
         part["lead_day"] = lead
         rows.append(part)
+    if not rows:
+        raise ValueError(f"нет погодных данных для запуска {issue_date}")
     return pd.concat(rows)
