@@ -58,3 +58,17 @@ def test_failed_rerun_hides_previous_forecast(tmp_path, monkeypatch):
     assert not at.exception
     assert any("недоступен" in error.value for error in at.error)
     assert not at.metric
+
+
+def test_dashboard_can_read_an_isolated_run(tmp_path, monkeypatch):
+    import shutil
+    from src import config
+
+    for path in config.FORECASTS.glob("*2026-02-10.*"):
+        shutil.copy2(path, tmp_path / path.name)
+    monkeypatch.setattr(config, "FORECASTS", tmp_path / "absent-default")
+    monkeypatch.setattr("sys.argv", ["app.py", "--forecast-dir", str(tmp_path)])
+    at = AppTest.from_file(str(APP), default_timeout=TIMEOUT).run()
+    assert not at.exception
+    assert at.metric, "панель не прочитала прогноз из выбранного каталога"
+    assert at.select_slider[0].value == "2026-02-10"

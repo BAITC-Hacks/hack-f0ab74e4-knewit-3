@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import date, timedelta
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -17,8 +18,9 @@ from src.weather.openmeteo import get_issued_forecast
 class DayContext:
     """Состояние одного прогнозного запуска (issue_date -> 48 часов вперёд)."""
 
-    def __init__(self, issue_date: str, weather: pd.DataFrame):
+    def __init__(self, issue_date: str, weather: pd.DataFrame, *, output_dir: Path | None = None):
         self.issue_date = issue_date
+        self.output_dir = Path(output_dir) if output_dir is not None else FORECASTS
         self.weather = weather          # полный архив (previous-runs, кэш)
         self.slice: pd.DataFrame | None = None
         self.features: pd.DataFrame | None = None
@@ -114,7 +116,7 @@ def compare_with_previous(ctx: DayContext) -> dict:
     prev_date = (date.fromisoformat(ctx.issue_date) - timedelta(days=1)).isoformat()
     out = {}
     for t in TURBINES:
-        prev_file = FORECASTS / f"forecast_t{t}_{prev_date}.csv"
+        prev_file = ctx.output_dir / f"forecast_t{t}_{prev_date}.csv"
         if not prev_file.exists():
             out[f"turbine_{t}"] = "нет предыдущего запуска"
             continue
@@ -138,18 +140,18 @@ def write_outputs(ctx: DayContext, analysis: str) -> dict:
     """CSV прогноза на каждый день + markdown-отчёт агента."""
     if not ctx.validation or not ctx.validation["ok"] or set(ctx.preds) != set(TURBINES):
         raise ValueError("Запись разрешена только после успешной валидации обеих турбин")
-    FORECASTS.mkdir(exist_ok=True)
+    ctx.output_dir.mkdir(parents=True, exist_ok=True)
     files = []
     for t, p in ctx.preds.items():
         df = p.reset_index().rename(columns={"index": "datetime", "time": "datetime"})
         df.insert(0, "turbine", t)
         df["horizon_h"] = range(1, len(df) + 1)
-        path = FORECASTS / f"forecast_t{t}_{ctx.issue_date}.csv"
+        path = ctx.output_dir / f"forecast_t{t}_{ctx.issue_date}.csv"
         cols = ["turbine", "datetime", "horizon_h", "lead_day",
                 "power_pred", "power_baseline", "power_lgb"]
         cols += [c for c in ("power_p10", "power_p90") if c in df.columns]
         df[cols].to_csv(path, index=False)
         files.append(path.name)
-    report = FORECASTS / f"report_{ctx.issue_date}.md"
+    report = ctx.output_dir / f"report_{ctx.issue_date}.md"
     report.write_text(f"# Отчёт агента — запуск {ctx.issue_date}\n\n{analysis}\n")
     return {"files": files, "report": report.name}

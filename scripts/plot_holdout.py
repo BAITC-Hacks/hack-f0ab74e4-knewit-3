@@ -1,7 +1,9 @@
-"""График для README: прогноз vs факт на holdout (запуск: python scripts/plot_holdout.py).
+"""Историческая иллюстрация для README: python -m scripts.plot_holdout.
 
-Одна панель на турбину: часовой ряд за показательную неделю января 2026 (не тестовый
-период — февраль модель не видела и факта у нас нет)."""
+Финальные модели обучены на показанных январских датах. График иллюстрирует подгонку;
+его нельзя использовать как независимую оценку точности. Оценочный график будет
+строиться по сохранённым прогнозам после интеграции нового протокола.
+"""
 from __future__ import annotations
 
 import sys
@@ -20,7 +22,7 @@ from src.features.dataset import load_hourly
 from src.models.predict import predict
 from src.weather.openmeteo import get_weather
 
-WEEK = ("2026-01-12", "2026-01-19")  # ветреная неделя holdout
+WEEK = ("2026-01-12", "2026-01-19")
 INK, BLUE, MUTED = "#3f3f46", "#2563eb", "#9ca3af"
 
 weather = get_weather(TRAIN_START, TEST_END)
@@ -36,7 +38,7 @@ for ax, t in zip(axes, TURBINES):
     actual = load_hourly(t)["power"].loc[WEEK[0]:WEEK[1]]
     pred = predict(t, X.loc[WEEK[0]:WEEK[1]])["power_pred"]
     ax.plot(actual.index, actual.values, color=INK, lw=1.6, label="Факт")
-    ax.plot(pred.index, pred.values, color=BLUE, lw=1.6, label="Прогноз (lead 24 ч)")
+    ax.plot(pred.index, pred.values, color=BLUE, lw=1.6, label="Расчёт финальной модели")
     ax.set_ylim(0, 1.05)
     ax.set_ylabel(f"Турбина {t}\nнорм. мощность", fontsize=9)
     ax.grid(True, color="#e5e7eb", lw=0.6)
@@ -44,7 +46,7 @@ for ax, t in zip(axes, TURBINES):
         ax.spines[s].set_visible(False)
     ax.tick_params(colors=MUTED, labelsize=8)
 axes[0].legend(loc="upper right", frameon=False, fontsize=9)
-axes[0].set_title("Прогноз выработки за сутки вперёд vs факт — неделя из holdout (12–19 января 2026)",
+axes[0].set_title("Расчёт на обучающих датах и факт: 12–19 января 2026 (не независимый тест)",
                   fontsize=11, color=INK, loc="left")
 plt.tight_layout()
 out = Path("docs/img/holdout_week.png")

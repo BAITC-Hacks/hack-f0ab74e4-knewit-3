@@ -6,7 +6,10 @@
 from __future__ import annotations
 
 import json
+import argparse
+import shlex
 from datetime import date, timedelta
+from pathlib import Path
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -14,6 +17,12 @@ import streamlit as st
 
 from src.config import (FORECASTS, HOLDOUT_END, HOLDOUT_START, TEST_END,
                         TEST_START, TRAIN_START, TURBINES)
+
+_args = argparse.ArgumentParser(add_help=False)
+_args.add_argument("--forecast-dir", type=Path)
+_options, _ = _args.parse_known_args()
+if _options.forecast_dir is not None:
+    FORECASTS = _options.forecast_dir
 
 INK, ACCENT, BAND, MUTED, GREEN, AMBER = (
     "#111821", "#1D5FD6", "rgba(29,95,214,.14)", "#8894A2", "#18734A", "#9E5A06")
@@ -194,6 +203,7 @@ st.caption("Шелекский коридор, Алматинская облас
 
 with st.sidebar:
     st.markdown("### Режим")
+    st.caption(f"Каталог результатов: {FORECASTS}")
     mode = st.radio("Режим", ["Тестовый период (февраль 2026)",
                               "Историческая иллюстрация (есть факт)"],
                     label_visibility="collapsed")
@@ -223,7 +233,8 @@ with st.sidebar:
 
 if not issue:
     st.warning("Прогнозы не найдены. Сначала выполните "
-               "`python -m src.cli run-agent --start 2026-01-31 --end 2026-02-27 --no-llm`.")
+               "`python -m src.cli run-agent --start 2026-01-31 --end 2026-02-27 "
+               f"--no-llm --output-dir {shlex.quote(str(FORECASTS))}`.")
     st.stop()
 
 holdout_mode = not mode.startswith("Тестовый")

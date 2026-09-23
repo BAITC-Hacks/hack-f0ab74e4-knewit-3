@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 
 import pandas as pd
 
@@ -66,13 +67,13 @@ def _template_analysis(outputs: dict, _ctx: T.DayContext) -> str:
     )
 
 
-def run_day_no_llm(issue_date: str, weather: pd.DataFrame) -> dict:
+def run_day_no_llm(issue_date: str, weather: pd.DataFrame, *, output_dir: Path | None = None) -> dict:
     """Детерминированный обход графа состояний (для судей без ключей)."""
     from src.agent.graph import run_graph
-    return run_graph(issue_date, weather, _template_analysis)
+    return run_graph(issue_date, weather, _template_analysis, output_dir=output_dir)
 
 
-def run_day_llm(issue_date: str, weather: pd.DataFrame) -> dict:
+def run_day_llm(issue_date: str, weather: pd.DataFrame, *, output_dir: Path | None = None) -> dict:
     """Полноценный агент: OpenAI, NVIDIA NIM или Claude через типизированные тулы.
 
     Бэкенд выбирается по ключам окружения (src/agent/llm.py). Если агент не довёл цикл
@@ -82,11 +83,11 @@ def run_day_llm(issue_date: str, weather: pd.DataFrame) -> dict:
 
     backend = pick_backend()
     if backend == "none":
-        return run_day_no_llm(issue_date, weather)
+        return run_day_no_llm(issue_date, weather, output_dir=output_dir)
     model = os.environ.get("LLM_MODEL", "по умолчанию")
     print(f"  [{issue_date}] LLM: {backend} / {model}")
 
-    graph = DayGraph(issue_date, weather, mode=backend)
+    graph = DayGraph(issue_date, weather, mode=backend, output_dir=output_dir)
     user_msg = f"День запуска: {issue_date}. Выполни полный цикл прогноза на 48 часов."
     loop_fn = anthropic_chat_loop if backend == "anthropic" else openai_chat_loop
     try:
