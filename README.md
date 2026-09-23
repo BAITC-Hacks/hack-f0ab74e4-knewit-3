@@ -1,37 +1,93 @@
-# KnewIT 3 — HackAlem AI Energy track
+# WindCast Agent — Agentic AI прогноз выработки ВЭС
 
-Team repository: https://github.com/BAITC-Hacks/hack-f0ab74e4-knewit-3
+Команда **KnewIT 3** · HackAlem AI 2026, кейс «Agentic AI для прогнозирования выработки ВЭС».
 
-This repository holds the team's HackAlem AI work. The Energy task, its company, dataset, and task-specific scoring criteria have **not yet been identified**. Until they are, keep possible topics in [ENERGY_IDEAS.md](ENERGY_IDEAS.md) and choose the implementation after reading the published task.
+Агентная система, которая для двух ветротурбин (Шелекский коридор, Алматинская область)
+самостоятельно выполняет полный цикл: получает **архивные прогнозы погоды, доступные на момент
+прогнозирования** → готовит данные → прогоняет ML-модель → формирует почасовой прогноз выработки
+на 24–48 часов → анализирует результат → пересчитывает при обновлении входных данных.
+Тестовый период: 1–28 февраля 2026, rolling-прогнозы с 31 января.
 
-## Confirmed event information
+## Ключевые идеи решения
 
-- In-person check-in: **23 September 2026, 09:00–12:00**, at EXPO, 53/1 Mangilik El Avenue, Astana. The contest runs **13:00–18:00** (Astana time).
-- Teams can have **up to three people**.
-- The updated rules permit AI tools. **Codex is not mandatory unless the specific task says otherwise.** The public landing page still says Codex is required, so check the Energy task when published.
-- Organizers review submissions on **24–28 September**; finalists present on **29 September**; awards are on **1 October**.
+1. **Честные архивные прогнозы, а не фактическая погода.** Используем Open-Meteo
+   *Previous Runs API*: переменные `*_previous_day1/2` возвращают значения из прогона погодной
+   модели, выпущенного за 1–2 дня до валидного часа — ровно то, что было бы доступно оператору
+   ВЭС в момент прогнозирования (требование ТЗ, которое легко нарушить незаметно).
+2. **Модель обучена на прогнозной погоде, а не на измеренной.** Обучающая матрица собрана из
+   архивных прогнозов 2024-01→2026-01, сматченных с фактической выработкой. Модель одновременно
+   выучивает кривую мощности турбины и систематические ошибки погодной модели (MOS-коррекция).
+3. **Agentic-цикл на Claude.** LLM-агент оркестрирует пайплайн типизированными тулами, валидирует
+   и анализирует каждый прогноз, решает о пересчёте, пишет отчёт. Режим `--no-llm` выполняет тот же
+   конвейер детерминированно — проверка не требует наших API-ключей.
+4. **Гибрид моделей:** физический baseline (кривая мощности с поправкой на плотность воздуха)
+   + LightGBM на прогнозных фичах; бленд взвешен на holdout (декабрь 2025 – январь 2026).
 
-Sources: [updated organizer regulations](https://edu.astanahub.com/hackathons/df4743f5-c492-415c-b45a-1f13adb78e06?tab=regulations) (sections 3.5, 5.3–5.6) and [public event page](https://www.hackalem.ai/), checked 23 September 2026.
+## Быстрый старт
 
-## Contest rules that affect this repo
+```bash
+# 1. Установка (нужен Python 3.11+ и uv: https://docs.astral.sh/uv/)
+uv sync
 
-- Preparation and reusable technical components are allowed, but the **main functionality answering the Energy task must be developed during the contest** (rule 5.4.4.2). Do not present a prebuilt product as contest work.
-- From the official start, use this organizer-issued GitHub repository as the **main working repository**. Keep a verifiable history and an intermediate result at the end of **each contest hour** (rules 5.4.8–5.4.11).
-- The version present at **18:00** is the judged version; later changes do not count (rules 5.4.13–5.4.14).
-- Judges must be able to install, run, and check the final app from this README. Document architecture, dependencies, environment settings, and the main demo scenario. A project they cannot run from the instructions is excluded (rules 5.4.15–5.4.16).
-- Disclose third-party code, models, data, and templates used in the solution (rule 5.4.4).
+# 2. Обучение моделей (данные и кэш погоды уже в репозитории; ~1 минута, CPU)
+uv run python -m src.cli train
 
-## Start-of-hackathon checklist
+# 3. Rolling-прогноз всего тестового периода (детерминированный режим, без ключей)
+uv run python -m src.cli run-agent --start 2026-01-31 --end 2026-02-28 --no-llm
 
-1. Save the official Energy prompt, dataset links, judging rubric, submission deadline, and any rules about pre-existing work in this repository.
-2. Turn the prompt into one sentence: **user + problem + measurable outcome**. Record required inputs, outputs, and constraints.
-3. Choose one demo scenario with a realistic sample input and a verifiable result. Agree on the baseline or comparison before building.
-4. Pick the smallest stack that supports that demo. Add exact setup, run, and verification commands here before submission, with a way for judges to test without personal accounts.
-5. Assign ownership for the product flow, data/model work, and demo/submission; keep a shared task list visible.
-6. Check in the first visible result by the end of the first contest hour, and continue showing progress each hour. Before 18:00, run the project from a clean checkout and submit exactly the artifacts requested by organizers.
+# 3'. То же с LLM-агентом (нужен ANTHROPIC_API_KEY в .env, см. .env.example)
+uv run python -m src.cli run-agent --start 2026-01-31 --end 2026-02-28
+```
 
-Do not commit API keys, personal data, or organizer-provided private datasets. Add any required local secrets to a stack-specific `.gitignore` when the stack is chosen.
+Результат: `forecasts/forecast_t{1,2}_{дата}.csv` на каждый день запуска, отчёты агента
+`forecasts/report_{дата}.md` и сводный **`forecasts/submission.csv`**
+(колонки `turbine, datetime, horizon_h, power_pred`; на каждый час взят прогноз
+минимального lead time).
 
-## Current state
+> Статус: репозиторий в активной разработке в контестное время; команды выше — целевой
+> сценарий, отметки готовности — в `docs/TASKS.md`. Этот блок будет заменён фактическими
+> результатами до 18:00.
 
-The organizer-provided repository originally contained only a two-line README. No application stack or dependencies have been selected, and there is no build or test command yet. The task-specific implementation starts after the official contest begins.
+## Демо-сценарий (для проверки судьями)
+
+```bash
+uv run python -m src.cli run-agent --start 2026-02-10 --end 2026-02-10
+```
+
+Один день цикла: агент запрашивает архивный прогноз, доступный 10.02.2026, строит фичи,
+прогоняет модели обеих турбин, валидирует границы и полноту 48 часов, сравнивает с прогнозом
+предыдущего дня и записывает CSV + человекочитаемый отчёт о своих шагах и решениях.
+
+## Архитектура
+
+```
+Агент (Claude / --no-llm цикл)
+  ├── fetch_weather      → Open-Meteo Previous Runs API (+кэш data/weather_cache/)
+  ├── prepare_features   → фичи: ветер 10–120 м, v³, плотность воздуха, направление,
+  │                        лаги, календарь, lead time
+  ├── run_model          → LightGBM (на турбину) + физический baseline, бленд
+  ├── validate_forecast  → границы [0,1], полнота 48 ч, аномалии
+  └── analyze_report     → сравнение с прошлым запуском, решение о пересчёте, отчёт
+```
+
+Подробно: `docs/ARCHITECTURE.md` (модули и контракты), `docs/RESEARCH.md` (выбор источников
+и модели), `docs/DATA.md` (профиль данных и правила обработки), `docs/DECISIONS.md` (ADR),
+`docs/CASE.md` (ТЗ кейса).
+
+## Данные и сторонние компоненты
+
+- Датасет организаторов: `data/raw/turbine_{1,2}.csv` — 10-минутные ряды 11.03.2023–31.01.2026
+  (ветер, нормализованная мощность, температура). В обучении агрегированы к часу.
+- Погода: [Open-Meteo](https://open-meteo.com) (Previous Runs API + Historical Forecast API),
+  открытые данные, некоммерческое использование. Ответы закэшированы в репозитории.
+- Библиотеки: pandas, LightGBM, scikit-learn, httpx, anthropic SDK. LLM: Claude (Anthropic).
+- Координаты турбин — из ссылок организаторов: T1 43.645150, 78.535604; T2 43.643198, 78.538828.
+
+## Качество
+
+Holdout: декабрь 2025 + январь 2026 (в обучение не входил). Метрики MAE/RMSE нормализованной
+мощности отдельно для горизонтов 0–24 ч и 24–48 ч — таблица будет здесь после финального прогона.
+
+## Команда
+
+KnewIT 3, 3 разработчика. Разделение работ: `docs/TASKS.md`.

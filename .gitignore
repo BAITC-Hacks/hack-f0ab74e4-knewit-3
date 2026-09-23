@@ -1,0 +1,12 @@
+# Секреты
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+
+# Служебное
+.DS_Store
+.ipynb_checkpoints/
