@@ -43,20 +43,20 @@ def main():
     fig, ax = plt.subplots(figsize=(12, 3.5))
     ys = np.array([1, 0])
     for key, label, color, offset in (
-        ("baseline", "Изотоническая кривая", GREY, .16),
-        ("lightgbm", "LightGBM для настройки", BLUE, -.16),
+        ("baseline", "Isotonic power curve", GREY, .16),
+        ("lightgbm", "LightGBM tuning model", BLUE, -.16),
     ):
         bars = ax.barh(ys + offset, [train[str(t)][key]["mae"] for t in (1, 2)],
                        height=.27, color=color, label=label)
         ax.bar_label(bars, fmt="%.4f", padding=6)
-    ax.set_yticks(ys, ["Турбина 1", "Турбина 2"])
+    ax.set_yticks(ys, ["Turbine 1", "Turbine 2"])
     ax.set_xlim(0, .225)
     ax.set_axisbelow(True)
     ax.grid(axis="x", color="#e6e5e1")
-    ax.set_xlabel("MAE нормализованной мощности")
+    ax.set_xlabel("MAE, fraction of rated capacity")
     ax.tick_params(length=0)
     ax.legend(loc="lower left", bbox_to_anchor=(0, 1.02), frameon=False, ncol=2)
-    fig.suptitle("Настройка моделей: декабрь 2025 – январь 2026", x=.09,
+    fig.suptitle("Model tuning: December 2025 – January 2026", x=.09,
                  ha="left", fontsize=15, fontweight="bold")
     fig.subplots_adjust(left=.09, right=.96, top=.77, bottom=.21)
     _save(fig, "model_ladder", "models_artifacts/train_report.json; tuning metrics.")
@@ -65,25 +65,25 @@ def main():
     pairs = [(1, 1), (1, 2), (2, 1), (2, 2)]
     groups = [metrics[f"turbine_{t}"][f"lead_{lead}"] for t, lead in pairs]
     for field, label, color, offset in (
-        ("mae_baseline", "Кривая мощности", GREY, -.18),
+        ("mae_baseline", "Power-curve baseline", GREY, -.18),
         ("mae", "LightGBM ×5", BLUE, .18),
     ):
         bars = ax.bar(np.arange(4) + offset, [g[field] for g in groups],
                       width=.34, label=label, color=color)
         ax.bar_label(bars, fmt="%.4f", padding=4, fontsize=10)
-    ax.set_xticks(np.arange(4), [f"Т{t} · lead {lead}\nn={g['n']}"
+    ax.set_xticks(np.arange(4), [f"T{t} · lead {lead}\nn={g['n']}"
                                for (t, lead), g in zip(pairs, groups)])
     ax.set_ylim(0, .25)
     ax.set_axisbelow(True)
     ax.grid(axis="y", color="#e6e5e1")
-    ax.set_ylabel("MAE, доля номинала")
+    ax.set_ylabel("MAE, fraction of rated capacity")
     ax.tick_params(length=0)
     ax.legend(loc="upper right", frameon=False, ncol=2)
-    fig.suptitle("Ретроспективная оценка ансамбля", x=.075, ha="left",
+    fig.suptitle("Retrospective ensemble evaluation", x=.075, ha="left",
                  fontsize=15, fontweight="bold")
     period = report["periods"]["evaluate"]
-    fig.text(.075, .865, f"{period[0]} – {period[1]} · обучение по {report['trained_through']}"
-             f" · {report['metrics']['rows']['clean_targets']} чистые цели",
+    fig.text(.075, .865, f"{period[0]} – {period[1]} · trained through {report['trained_through']}"
+             f" · {report['metrics']['rows']['clean_targets']} eligible targets",
              fontsize=10, color="#52514e")
     fig.subplots_adjust(left=.075, right=.97, top=.81, bottom=.18)
     _save(fig, "evaluation_mae", "models_artifacts/evaluation/evaluation_report.json; clean_targets.")
@@ -99,8 +99,8 @@ def main():
         rows = forecasts[forecasts.turbine == turbine]
         ax.fill_between(rows.datetime, rows.power_p10, rows.power_p90,
                         color=BLUE, alpha=.16, label="P10–P90")
-        ax.plot(rows.datetime, rows.power_pred, color=BLUE, lw=1, label="Прогноз")
-        ax.set_ylabel(f"Т{turbine} · доля номинала")
+        ax.plot(rows.datetime, rows.power_pred, color=BLUE, lw=1, label="Forecast")
+        ax.set_ylabel(f"T{turbine} · rated fraction")
         ax.set_ylim(-.02, 1.04)
         ax.set_axisbelow(True)
         ax.grid(axis="y", color="#e6e5e1")
@@ -109,9 +109,9 @@ def main():
     axes[1].xaxis.set_major_locator(mdates.DayLocator(interval=4))
     axes[1].xaxis.set_major_formatter(mdates.DateFormatter("%d.%m"))
     axes[1].set_xlim(forecasts.datetime.min(), forecasts.datetime.max())
-    fig.suptitle(f"Подача: февраль 2026 · {len(forecasts)} turbine-hours",
+    fig.suptitle(f"Submission: February 2026 · {len(forecasts)} turbine-hours",
                  x=.075, ha="left", fontsize=15, fontweight="bold")
-    fig.text(.075, .9, "Прогноз свежайшего выпуска (lead 1) · фактическая выработка февраля недоступна",
+    fig.text(.075, .9, "Latest issue per hour (lead 1) · February actuals unavailable",
              fontsize=10, color="#52514e")
     fig.subplots_adjust(left=.075, right=.98, top=.84, bottom=.09, hspace=.18)
     _save(fig, "february_submission", "forecasts/forecast_t*.csv; latest lead per turbine-hour.")

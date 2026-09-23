@@ -149,20 +149,20 @@ L 829.44 57.96
      </g>
     </g>
     <g id="text_11">
-     <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle" x="453.6" y="224.177656" transform="rotate(-0 453.6 224.177656)">MAE нормализованной мощности</text>
+     <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle" x="453.6" y="224.178438" transform="rotate(-0 453.6 224.178438)">MAE, fraction of rated capacity</text>
     </g>
    </g>
    <g id="matplotlib.axis_2">
     <g id="ytick_1">
      <g id="line2d_21"/>
      <g id="text_12">
-      <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: end; fill: #52514e" x="74.26" y="92.061322" transform="rotate(-0 74.26 92.061322)">Турбина 1</text>
+      <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: end; fill: #52514e" x="74.26" y="91.976166" transform="rotate(-0 74.26 91.976166)">Turbine 1</text>
      </g>
     </g>
     <g id="ytick_2">
      <g id="line2d_22"/>
      <g id="text_13">
-      <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: end; fill: #52514e" x="74.26" y="172.747428" transform="rotate(-0 74.26 172.747428)">Турбина 2</text>
+      <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: end; fill: #52514e" x="74.26" y="172.662272" transform="rotate(-0 74.26 172.662272)">Turbine 2</text>
      </g>
     </g>
    </g>
@@ -220,23 +220,23 @@ z
 " style="fill: #b8b6ad"/>
     </g>
     <g id="text_18">
-     <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #202522" x="114.76" y="43.735256" transform="rotate(-0 114.76 43.735256)">Изотоническая кривая</text>
+     <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #202522" x="114.76" y="43.735256" transform="rotate(-0 114.76 43.735256)">Isotonic power curve</text>
     </g>
     <g id="patch_8">
-     <path d="M 254.50375 43.735256
-L 274.50375 43.735256
-L 274.50375 36.735256
-L 254.50375 36.735256
+     <path d="M 238.975625 43.735256
+L 258.975625 43.735256
+L 258.975625 36.735256
+L 238.975625 36.735256
 z
 " style="fill: #2a78d6"/>
     </g>
     <g id="text_19">
-     <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #202522" x="282.50375" y="43.735256" transform="rotate(-0 282.50375 43.735256)">LightGBM для настройки</text>
+     <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #202522" x="266.975625" y="43.735256" transform="rotate(-0 266.975625 43.735256)">LightGBM tuning model</text>
     </g>
    </g>
   </g>
   <g id="text_20">
-   <text style="font-weight: 700; font-size: 15px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #202522" x="77.76" y="16.9275" transform="rotate(-0 77.76 16.9275)">Настройка моделей: декабрь 2025 – январь 2026</text>
+   <text style="font-weight: 700; font-size: 15px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #202522" x="77.76" y="16.437656" transform="rotate(-0 77.76 16.437656)">Model tuning: December 2025 – January 2026</text>
   </g>
  </g>
  <defs>

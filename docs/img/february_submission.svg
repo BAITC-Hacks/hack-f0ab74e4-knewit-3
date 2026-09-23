@@ -117,7 +117,7 @@ L 846.72 59.782758
      </g>
     </g>
     <g id="text_6">
-     <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle" x="32.632031" y="114.745541" transform="rotate(-90 32.632031 114.745541)">Т1 · доля номинала</text>
+     <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle" x="32.632031" y="114.745541" transform="rotate(-90 32.632031 114.745541)">T1 · rated fraction</text>
     </g>
    </g>
    <g id="FillBetweenPolyCollection_1">
@@ -2100,24 +2100,24 @@ L 846.72 143.220087
    </g>
    <g id="legend_1">
     <g id="patch_3">
-     <path d="M 675.995 71.894437
-L 695.995 71.894437
-L 695.995 64.894437
-L 675.995 64.894437
+     <path d="M 676.896563 71.894437
+L 696.896563 71.894437
+L 696.896563 64.894437
+L 676.896563 64.894437
 z
 " style="fill: #2a78d6; fill-opacity: 0.16; stroke: #2a78d6; stroke-opacity: 0.16; stroke-linejoin: miter"/>
     </g>
     <g id="text_7">
-     <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #202522" x="703.995" y="71.894437" transform="rotate(-0 703.995 71.894437)">P10–P90</text>
+     <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #202522" x="704.896563" y="71.894437" transform="rotate(-0 704.896563 71.894437)">P10–P90</text>
     </g>
     <g id="line2d_19">
-     <path d="M 766.504375 68.394437
-L 776.504375 68.394437
-L 786.504375 68.394437
+     <path d="M 767.405938 68.394437
+L 777.405938 68.394437
+L 787.405938 68.394437
 " style="fill: none; stroke: #2a78d6; stroke-linecap: square"/>
     </g>
     <g id="text_8">
-     <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #202522" x="794.504375" y="71.894437" transform="rotate(-0 794.504375 71.894437)">Прогноз</text>
+     <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #202522" x="795.405938" y="71.894437" transform="rotate(-0 795.405938 71.894437)">Forecast</text>
     </g>
    </g>
   </g>
@@ -2231,7 +2231,7 @@ L 846.72 200.083675
      </g>
     </g>
     <g id="text_21">
-     <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle" x="32.632031" y="255.046459" transform="rotate(-90 32.632031 255.046459)">Т2 · доля номинала</text>
+     <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle" x="32.632031" y="255.046459" transform="rotate(-90 32.632031 255.046459)">T2 · rated fraction</text>
     </g>
    </g>
    <g id="FillBetweenPolyCollection_2">
@@ -4196,10 +4196,10 @@ L 846.72 285.253797
    </g>
   </g>
   <g id="text_22">
-   <text style="font-weight: 700; font-size: 15px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #202522" x="64.8" y="18.309656" transform="rotate(-0 64.8 18.309656)">Подача: февраль 2026 · 1344 turbine-hours</text>
+   <text style="font-weight: 700; font-size: 15px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #202522" x="64.8" y="18.309656" transform="rotate(-0 64.8 18.309656)">Submission: February 2026 · 1344 turbine-hours</text>
   </g>
   <g id="text_23">
-   <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #52514e" x="64.8" y="34.56" transform="rotate(-0 64.8 34.56)">Прогноз свежайшего выпуска (lead 1) · фактическая выработка февраля недоступна</text>
+   <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #52514e" x="64.8" y="34.56" transform="rotate(-0 64.8 34.56)">Latest issue per hour (lead 1) · February actuals unavailable</text>
   </g>
  </g>
  <defs>

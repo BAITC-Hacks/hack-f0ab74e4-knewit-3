@@ -17,12 +17,12 @@
   "source_sha256": {
     ".github/workflows/reproducibility.yml": "d5c50fa29418b755fd3fb604a02f50eb7eadd177d534a4396e80639b9924a782",
     "Dockerfile": "1a47281c8b05a3a8a9975dae49fde56816c4749c22ea8b2e205d4b048dcc2de2",
-    "app.py": "f9740d991ad9b3f583c810dd572724d60d36e21369ebdd43334988647c3c3594",
+    "app.py": "9721867c6c2660fb2ded24139a1dce040d1153159f18b3b511c9c4b00ca4da1f",
     "docker-compose.yml": "e114a2ae774a36f8ecd44c488858543b23901f9da5973184056cf94f1ef4319c",
     "requirements.txt": "10a9d95f33cc4a9d94fd31ed25b841c981e8ebceec1486e66b6acb3d3ec6805d",
     "scripts/compare_runs.py": "664ddfc5d435c87f63f6b895edcbad120a38a757eb614def6c9eff3abc72cf38",
     "scripts/plot_holdout.py": "1e2202d7eb711d25f3c7edde46ab97779f83eba8a81dfe1f70b4f0067eb7c2bc",
-    "scripts/plot_overview.py": "12ec8c9b492e089cd4b73e49d6995e4806b4d01c38a9cd3fbee01520797d06ae",
+    "scripts/plot_overview.py": "36359b2e2c3e607c1342ce5d5722bd5465d5a4caf39249a9a62db6a4793c18bc",
     "scripts/reproduce.py": "c30a86d22e7855cf776e12bc8a17889ca12cde87d5e4af8c13ff23c893873908",
     "scripts/verify_submission.py": "8fa917959d9e01ba13848a8c07ab447d43a4b5081b78e7533386150a92e05370",
     "src/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -271,7 +271,44 @@
       "rounded_differing_cells": 0,
       "max_rounded_deviation": 0.0
     },
-    "new_live_llm_call": false
+    "new_live_llm_call": false,
+    "strict_reproduction": {
+      "macos_arm64": {
+        "ok": true,
+        "duration_s": 7.3,
+        "absolute_tolerance": 1e-09,
+        "forecast_max_deviation": 0.0,
+        "evaluation_max_deviation": 1.1102230246251565e-16,
+        "submission_rows": 1344,
+        "evaluation_rows": 5904,
+        "all_eight_checks_passed": true
+      },
+      "linux_aarch64": {
+        "ok": true,
+        "duration_s": 11.4,
+        "absolute_tolerance": 1e-09,
+        "forecast_max_deviation": 0.0,
+        "evaluation_max_deviation": 1.1102230246251565e-16,
+        "submission_rows": 1344,
+        "evaluation_rows": 5904,
+        "all_eight_checks_passed": true
+      }
+    },
+    "ui": {
+      "docker_health": "healthy",
+      "health_endpoint": "ok",
+      "http_status": 200,
+      "browser": "isolated Chrome with Playwright",
+      "checked": [
+        "February forecast",
+        "saved evaluation",
+        "lead1/lead2",
+        "observed target mask",
+        "refresh"
+      ],
+      "javascript_errors": 0
+    },
+    "github_actions": "Blocked by organisation billing; jobs receive no runner and execute zero steps. Local checks do not claim hosted CI passed."
   },
   "commands": [
     "python -m src.cli train",
