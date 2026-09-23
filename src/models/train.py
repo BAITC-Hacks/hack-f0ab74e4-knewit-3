@@ -83,10 +83,18 @@ def train_turbine(turbine: int, weather: pd.DataFrame) -> dict:
     iso_full = IsotonicRegression(y_min=0, y_max=1, out_of_bounds="clip")
     iso_full.fit(X["ens_ws_mean"], y)
 
+    # Квантильные модели P10/P90 — диапазон неопределённости для оператора
+    quantiles = {}
+    for q in (0.1, 0.9):
+        mq = lgb.LGBMRegressor(**{**LGB_PARAMS, "objective": "quantile", "alpha": q,
+                                  "n_estimators": n_est})
+        mq.fit(X, y)
+        quantiles[q] = mq
+
     ARTIFACTS.mkdir(exist_ok=True)
     with open(ARTIFACTS / f"turbine_{turbine}.pkl", "wb") as f:
         pickle.dump({"lgbs": finals, "iso": iso_full, "w_lgb": best_w,
-                     "features": list(X.columns)}, f)
+                     "quantiles": quantiles, "features": list(X.columns)}, f)
     return report
 
 

@@ -43,31 +43,32 @@ autonomy: сам находит и чинит проблемы (дыра в по
 ## Контракты между модулями (согласовано, менять — только всем вместе)
 
 ```python
-# src/weather -> src/features
-def get_archived_forecast(lat: float, lon: float, issue_date: date,
-                          horizon_h: int = 48) -> pd.DataFrame:
-    """Прогноз, доступный утром issue_date, на следующие horizon_h часов.
-    Индекс: datetime (Asia/Almaty, hourly). Колонки: wind_speed_10m/80m/100m/120m,
-    wind_direction_80m, wind_gusts_10m, temperature_2m, surface_pressure, lead_time_h.
-    Всё из previous-runs API — фактическая погода сюда попасть НЕ может."""
+# src/weather/openmeteo.py -> src/features
+def get_weather(start: str, end: str, models=None) -> pd.DataFrame:
+    """Архивные прогнозы previous-runs API за период, все источники и оба lead time.
+    Индекс: datetime (Asia/Almaty). Колонки: {model}__{var}__d{1|2}, ветер в м/с.
+    Фактическая погода сюда попасть НЕ может по построению. Кэш data/weather_cache/."""
 
-def get_training_weather(lat: float, lon: float, start: date, end: date) -> pd.DataFrame:
-    """То же самое поколонно, но за исторический период (historical-forecast-api)."""
+def get_issued_forecast(issue_date: str, weather: pd.DataFrame) -> pd.DataFrame:
+    """Срез «что было доступно в день issue_date»: часы D+1 (lead 1) + D+2 (lead 2).
+    Колонки {model}__{var} + lead_day; на краю архива допустимы только 24 часа."""
 
 # src/features -> src/models
-def build_features(weather: pd.DataFrame) -> pd.DataFrame:
-    """Фичи из погоды (см. RESEARCH.md §3). Детерминированно, без обращений к сети."""
+def build_features(weather_slice: pd.DataFrame) -> pd.DataFrame:
+    """108 фич из прогнозной погоды (RESEARCH.md §3). Детерминированно, без сети."""
 
-def load_hourly_target(turbine: int) -> pd.Series:
-    """Почасовая нормализованная мощность из data/raw, с NaN на неполных/простойных часах."""
+def load_hourly(turbine: int) -> pd.DataFrame:
+    """Почасовая агрегация data/raw: колонка target с NaN на неполных/простойных часах."""
 
 # src/models -> src/agent
 def predict(turbine: int, features: pd.DataFrame) -> pd.DataFrame:
-    """Колонки: power_pred (клип 0..1), power_baseline. Модель из models/artifacts/."""
+    """Колонки: power_pred (клип 0..1), power_baseline, power_lgb, power_p10, power_p90.
+    Артефакты (бэггинг 5 LightGBM + изотоническая кривая + квантили) из models_artifacts/."""
 
 # src/agent — выход
-# forecasts/forecast_t{N}_{issue_date}.csv: turbine, datetime, horizon_h, power_pred
-# forecasts/report_{issue_date}.md: анализ агента (что получил, что заметил, решения)
+# forecasts/forecast_t{N}_{issue_date}.csv: turbine, datetime, horizon_h, lead_day,
+#   power_pred, power_baseline, power_lgb, power_p10, power_p90
+# forecasts/report_{issue_date}.md: отчёт агента; forecasts/submission.csv — сводный
 ```
 
 ## Rolling-цикл теста (сценарий, который увидят судьи)
@@ -83,7 +84,7 @@ python -m src.cli run-agent --start 2026-01-31 --end 2026-02-28
 
 ## Стек
 
-Python 3.11+ · pandas · LightGBM · scikit-learn · httpx · anthropic · uv (окружение).
+Python 3.11+ · venv+pip · pandas · LightGBM · scikit-learn · httpx · anthropic.
 Обучение на CPU за секунды — GPU/NVIDIA-кредиты не требуются (ADR-004).
 Ключ `ANTHROPIC_API_KEY` в `.env` (не коммитить); без ключа работает деградированный режим
 `--no-llm` — тот же пайплайн детерминированным циклом, судьи могут проверить без ключа.

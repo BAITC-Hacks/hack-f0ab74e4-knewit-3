@@ -118,8 +118,10 @@ def write_outputs(ctx: DayContext, analysis: str) -> dict:
         df.insert(0, "turbine", t)
         df["horizon_h"] = range(1, len(df) + 1)
         path = FORECASTS / f"forecast_t{t}_{ctx.issue_date}.csv"
-        df[["turbine", "datetime", "horizon_h", "lead_day",
-            "power_pred", "power_baseline", "power_lgb"]].to_csv(path, index=False)
+        cols = ["turbine", "datetime", "horizon_h", "lead_day",
+                "power_pred", "power_baseline", "power_lgb"]
+        cols += [c for c in ("power_p10", "power_p90") if c in df.columns]
+        df[cols].to_csv(path, index=False)
         files.append(path.name)
     report = FORECASTS / f"report_{ctx.issue_date}.md"
     report.write_text(f"# Отчёт агента — запуск {ctx.issue_date}\n\n{analysis}\n")

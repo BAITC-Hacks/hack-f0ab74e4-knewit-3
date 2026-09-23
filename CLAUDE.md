@@ -33,7 +33,7 @@
 
 ## Стек
 
-Python 3.11+ · uv · pandas · LightGBM · scikit-learn · httpx · anthropic.
+Python 3.11+ · venv+pip · pandas · LightGBM · scikit-learn · httpx · anthropic.
 GPU не используется. Комментарии и коммиты — на русском, имена в коде — английские.
 
 ## Контекст, о котором легко забыть
