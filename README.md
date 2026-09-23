@@ -120,8 +120,9 @@ Offline-прогон защищает имеющиеся LLM-отчёты; `--ov
 docker compose up --build
 ```
 
-Панель открывается на **http://localhost:8501**. Образ обучает модели при сборке;
-каталог `forecasts/` подключён с хоста. Для отдельной проверки в одноразовом контейнере:
+Панель открывается на **http://localhost:8501**. Образ включает проверенные модели и
+канонические прогнозы, обучения при сборке нет; каталог `forecasts/` подключён с хоста
+только для чтения. Для отдельной проверки в одноразовом контейнере:
 
 ```bash
 docker compose run --rm windcast sh -c \
@@ -130,6 +131,28 @@ docker compose run --rm windcast sh -c \
 
 Результаты этого smoke-прогона удалятся вместе с контейнером. Полная репетиция
 объединённой версии и фиксация совместимых зависимостей остаются пунктами приёмки.
+
+### Воспроизводимость и CI
+
+Workflow `.github/workflows/reproducibility.yml` настроен (Linux, Python 3.12, полный
+pytest без пропусков, проверка подачи, offline-репетиция, сборка образа, прогон с
+`--network none`, панель), но в организации хакатона GitHub Actions заблокированы биллингом:
+задания не стартуют с аннотацией «The job was not started because your account is locked due
+to a billing issue». Те же проверки выполняются локально:
+
+```bash
+python -m pytest tests/ -q -rs                    # 92 теста, пропусков быть не должно
+python -m scripts.verify_submission
+python -m scripts.reproduce --output-dir runs/reproduction      # сохранённые модели, без сети
+docker build -t windcast:ci .
+docker run --rm --network none windcast:ci \
+  python -m scripts.reproduce --output-dir /tmp/reproduction --tolerance 0.05
+docker run -d -p 8501:8501 --name windcast-ui windcast:ci && curl -sf http://127.0.0.1:8501/_stcore/health
+```
+
+Допуск `0.05` для Linux-контейнера задан явно: канонические числа получены на macOS, а glibc
+даёт разницу в 1 ulp в тригонометрических признаках. Что проверяется, результаты и причина
+расхождения — [REPRODUCIBILITY](docs/REPRODUCIBILITY.md).
 
 ### LLM и дополнительные команды
 
