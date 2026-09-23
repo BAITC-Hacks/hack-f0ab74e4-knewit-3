@@ -41,21 +41,33 @@ def anthropic_chat_loop(system: str, tool_defs: list[dict], user_msg: str,
 
 
 def _openai_post(base: str, key: str, payload: dict, retries: int = 3) -> dict:
-    """POST с повтором на 429/5xx. Лимит токенов называется по-разному в поколениях
-    моделей (max_tokens у GPT-4-линейки, max_completion_tokens у новых) — пробуем оба."""
+    """POST с повтором на 429/5xx и правкой несовместимых параметров.
+
+    Правка параметра не расходует попытки повтора: это разовая подстройка под поколение
+    модели, а не сбой. Лимит токенов называется по-разному (max_tokens у GPT-4-линейки,
+    max_completion_tokens у новых), а reasoning_effort принимают не все эндпоинты.
+    """
     import httpx
-    last = None
-    for attempt in range(retries):
+    last, attempt, fixes = None, 0, 0
+    while attempt < retries:
         r = httpx.post(f"{base}/chat/completions",
                        headers={"Authorization": f"Bearer {key}"},
                        json=payload, timeout=180)
-        if r.status_code == 400 and "max_tokens" in r.text and "max_completion_tokens" in r.text:
-            payload = {k: v for k, v in payload.items() if k != "max_tokens"}
-            payload["max_completion_tokens"] = 2500
-            continue
+        if r.status_code == 400 and fixes < 2:
+            body = r.text
+            if "max_tokens" in body and "max_completion_tokens" in body:
+                payload.pop("max_tokens", None)
+                payload["max_completion_tokens"] = 2500
+                fixes += 1
+                continue
+            if "reasoning_effort" in body and "reasoning_effort" in payload:
+                payload.pop("reasoning_effort")
+                fixes += 1
+                continue
         if r.status_code == 429 or r.status_code >= 500:
             last = r
             time.sleep(2 ** attempt)
+            attempt += 1
             continue
         r.raise_for_status()
         return r.json()
@@ -75,7 +87,7 @@ def openai_chat_loop(system: str, tool_defs: list[dict], user_msg: str,
                               "parameters": t["input_schema"]}} for t in tool_defs]
     messages = [{"role": "system", "content": system},
                 {"role": "user", "content": user_msg}]
-    for _ in range(max_steps):
+    for step in range(max_steps):
         payload = {"model": model, "messages": messages, "tools": oa_tools}
         if model.startswith(("gpt-6-luna", "gpt-6-sol")):
             # У GPT-6 в Chat Completions тулы доступны только без reasoning.
@@ -86,6 +98,12 @@ def openai_chat_loop(system: str, tool_defs: list[dict], user_msg: str,
         msg = data["choices"][0]["message"]
         calls = msg.get("tool_calls") or []
         if not calls:
+            if step == 0:
+                # Модель не вызвала ни одного тула на первом шаге — почти наверняка
+                # tool calling не работает на этой конфигурации (см. reasoning_effort
+                # у GPT-6 в Chat Completions). Молчать нельзя: день тихо уйдёт в --no-llm.
+                print(f"    ВНИМАНИЕ: модель {model} не вызвала тулы на первом шаге. "
+                      f"Ответ: {str(msg.get('content'))[:160]!r}")
             return None
         messages.append(msg)
         done = False
