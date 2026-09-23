@@ -15,6 +15,7 @@ import pandas as pd
 from src.weather.openmeteo import get_issued_forecast, issue_dates
 
 R_AIR = 287.05  # Дж/(кг·К)
+FEATURE_DECIMALS = 10
 
 
 def _model_block(df: pd.DataFrame, model: str) -> pd.DataFrame:
@@ -107,7 +108,10 @@ def build_features(weather_slice: pd.DataFrame) -> pd.DataFrame:
     X["doy_cos"] = np.cos(2 * np.pi * idx.dayofyear / 365)
     if "lead_day" in weather_slice.columns:
         X["lead_day"] = weather_slice["lead_day"]
-    return X
+    # libm разных платформ даёт младшие биты, на которых дерево может разделить
+    # математически равные значения. Один контракт точности для обучения и прогноза;
+    # изменение требует переобучения. 1e-10 намного меньше точности погодных входов.
+    return X.round(FEATURE_DECIMALS)
 
 
 def issued_feature_stack(weather: pd.DataFrame,
