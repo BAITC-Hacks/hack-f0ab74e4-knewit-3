@@ -1,12 +1,18 @@
 {
  "issue_date": "2026-02-12",
+ "mode": "no-llm",
+ "completed": true,
+ "next_tool": null,
+ "validation_ok": true,
  "retried": false,
+ "fallback": false,
+ "error": null,
  "trace": [
   {
    "node": "fetch_weather",
    "label": "Получение архивного прогноза погоды",
    "status": "ok",
-   "ms": 2.5,
+   "ms": 2.0,
    "output": {
     "issue_date": "2026-02-12",
     "hours": 48,
@@ -25,46 +31,49 @@
      "ukmo_global_deterministic_10km"
     ]
    },
-   "attempt": 1
+   "attempt": 1,
+   "next_tool": "prepare_features"
   },
   {
    "node": "prepare_features",
    "label": "Подготовка признаков",
    "status": "ok",
-   "ms": 18.9,
+   "ms": 7.8,
    "output": {
     "rows": 48,
     "n_features": 108,
     "na_fraction": 0.0116
    },
-   "attempt": 1
+   "attempt": 1,
+   "next_tool": "run_model"
   },
   {
    "node": "run_model",
    "label": "Запуск моделей обеих турбин",
    "status": "ok",
-   "ms": 66.0,
+   "ms": 43.0,
    "output": {
     "turbine_1": {
      "mean": 0.213,
-     "max": 0.861,
+     "max": 0.871,
      "hours": 48,
-     "expected_energy_norm_24h": 2.21
+     "expected_energy_norm_24h": 2.2
     },
     "turbine_2": {
-     "mean": 0.209,
-     "max": 0.853,
+     "mean": 0.211,
+     "max": 0.855,
      "hours": 48,
-     "expected_energy_norm_24h": 2.07
+     "expected_energy_norm_24h": 2.1
     }
    },
-   "attempt": 1
+   "attempt": 1,
+   "next_tool": "validate_forecast"
   },
   {
    "node": "validate_forecast",
    "label": "Физическая валидация прогноза",
    "status": "ok",
-   "ms": 0.3,
+   "ms": 0.2,
    "output": {
     "ok": true,
     "checks": {
@@ -84,34 +93,36 @@
      }
     }
    },
-   "attempt": 1
+   "attempt": 1,
+   "next_tool": "compare_with_previous"
   },
   {
    "node": "compare_with_previous",
    "label": "Сравнение с прошлым запуском",
    "status": "ok",
-   "ms": 4.5,
+   "ms": 2.5,
    "output": {
     "turbine_1": {
      "hours_overlap": 24,
-     "mean_abs_update": 0.032,
-     "max_abs_update": 0.258,
+     "mean_abs_update": 0.03,
+     "max_abs_update": 0.229,
      "significant_update": false
     },
     "turbine_2": {
      "hours_overlap": 24,
-     "mean_abs_update": 0.03,
-     "max_abs_update": 0.241,
+     "mean_abs_update": 0.028,
+     "max_abs_update": 0.238,
      "significant_update": false
     }
    },
-   "attempt": 1
+   "attempt": 1,
+   "next_tool": "write_outputs"
   },
   {
    "node": "write_outputs",
    "label": "Запись прогноза и отчёта",
    "status": "ok",
-   "ms": 0.0,
+   "ms": 2.7,
    "output": {
     "files": [
      "forecast_t1_2026-02-12.csv",
@@ -119,7 +130,13 @@
     ],
     "report": "report_2026-02-12.md"
    },
-   "attempt": 1
+   "attempt": 1,
+   "next_tool": null
   }
- ]
+ ],
+ "files": [
+  "forecast_t1_2026-02-12.csv",
+  "forecast_t2_2026-02-12.csv"
+ ],
+ "report": "report_2026-02-12.md"
 }

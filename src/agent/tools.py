@@ -29,7 +29,7 @@ class DayContext:
 
 
 def fetch_weather(ctx: DayContext) -> dict:
-    """Архивный прогноз, доступный в issue_date: 24ч lead-1 + 24ч lead-2."""
+    """Срез архивного прогноза для issue_date: 24ч lead-1 + 24ч lead-2."""
     ctx.slice = get_issued_forecast(ctx.issue_date, ctx.weather)
     ws = ctx.slice[[c for c in ctx.slice.columns if c.endswith("wind_speed_100m")]]
     n_missing = int(ws.isna().all(axis=1).sum())
@@ -153,5 +153,5 @@ def write_outputs(ctx: DayContext, analysis: str) -> dict:
         df[cols].to_csv(path, index=False)
         files.append(path.name)
     report = ctx.output_dir / f"report_{ctx.issue_date}.md"
-    report.write_text(f"# Отчёт агента — запуск {ctx.issue_date}\n\n{analysis}\n")
+    report.write_text(f"# Отчёт агента — запуск {ctx.issue_date}\n\n{analysis.rstrip()}\n")
     return {"files": files, "report": report.name}

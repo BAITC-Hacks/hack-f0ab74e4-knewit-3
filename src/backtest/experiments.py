@@ -9,8 +9,8 @@ import numpy as np
 import pandas as pd
 import lightgbm as lgb
 
-from src.config import HOLDOUT_START, TRAIN_END, TRAIN_START, TEST_END
-from src.features.build import training_matrix
+from src.config import HOLDOUT_END, HOLDOUT_START, TRAIN_END, TRAIN_START, TEST_END
+from src.features.build import issued_feature_stack, training_matrix
 from src.features.dataset import load_hourly
 from src.models.train import LGB_PARAMS
 from src.weather.openmeteo import get_spatial_weather, get_weather
@@ -24,12 +24,15 @@ def run():
     spatial = get_spatial_weather(TRAIN_START, TEST_END)
     both = pd.concat([weather, spatial], axis=1)
     print(f"weather: {weather.shape}, spatial: {spatial.shape}")
+    variants = [("A: 5 сильных моделей", weather),
+                ("B: A + пространственные градиенты", both)]
+    stacks = {name: issued_feature_stack(wdf) for name, wdf in variants}
 
     for turbine in (1, 2):
         hourly = load_hourly(turbine)
-        for name, wdf in [("A: 5 сильных моделей", weather),
-                          ("B: A + пространственные градиенты", both)]:
-            X, y = training_matrix(wdf, hourly["target"])
+        for name, wdf in variants:
+            X, y = training_matrix(wdf, hourly["target"], stack=stacks[name],
+                                   target_end=f"{HOLDOUT_END} 23:00")
             tr = (X.index >= TRAIN_START) & (X.index <= f"{TRAIN_END} 23:59")
             ho = X.index >= HOLDOUT_START
             Xtr, ytr, Xho, yho = X[tr], y[tr], X[ho], y[ho]

@@ -26,18 +26,27 @@ def predict(turbine: int, features: pd.DataFrame,
             artifacts_dir: Path | str | None = None) -> pd.DataFrame:
     art = load_model(turbine, artifacts_dir)
     X = features.reindex(columns=art["features"])
-    lgb_p = np.clip(np.mean([m.predict(X) for m in art["lgbs"]], axis=0), 0, 1)
-    iso_p = art["iso"].predict(X["ens_ws_mean"])
-    w = art["w_lgb"]
-    out = pd.DataFrame(index=features.index)
-    out["power_baseline"] = iso_p
-    out["power_lgb"] = lgb_p
-    out["power_pred"] = np.clip(w * lgb_p + (1 - w) * iso_p, 0, 1)
-    if "quantiles" in art:  # диапазон неопределённости, согласованный с точечным прогнозом
-        p10 = np.clip(art["quantiles"][0.1].predict(X), 0, 1)
-        p90 = np.clip(art["quantiles"][0.9].predict(X), 0, 1)
-        out["power_p10"] = np.minimum(p10, out["power_pred"])
-        out["power_p90"] = np.maximum(p90, out["power_pred"])
+    # Без ветра всех источников нет и физического baseline. Сохраняем пропуск,
+    # чтобы граф выполнил валидацию и остановил публикацию после резервной попытки.
+    available = np.isfinite(X["ens_ws_mean"].to_numpy(dtype=float))
+    columns = ["power_baseline", "power_lgb", "power_pred"]
+    if "quantiles" in art:
+        columns += ["power_p10", "power_p90"]
+    out = pd.DataFrame(np.nan, index=features.index, columns=columns)
+    if available.any():
+        valid = X.loc[available]
+        lgb_p = np.clip(np.mean([m.predict(valid) for m in art["lgbs"]], axis=0), 0, 1)
+        iso_p = art["iso"].predict(valid["ens_ws_mean"])
+        w = art["w_lgb"]
+        point = np.clip(w * lgb_p + (1 - w) * iso_p, 0, 1)
+        out.loc[available, "power_baseline"] = iso_p
+        out.loc[available, "power_lgb"] = lgb_p
+        out.loc[available, "power_pred"] = point
+        if "quantiles" in art:
+            p10 = np.clip(art["quantiles"][0.1].predict(valid), 0, 1)
+            p90 = np.clip(art["quantiles"][0.9].predict(valid), 0, 1)
+            out.loc[available, "power_p10"] = np.minimum(p10, point)
+            out.loc[available, "power_p90"] = np.maximum(p90, point)
     if "lead_day" in features.columns:
         out["lead_day"] = features["lead_day"]
     return out

@@ -1,10 +1,11 @@
-"""Клиент Open-Meteo Previous Runs API: архивные прогнозы, доступные на момент прогнозирования.
+"""Клиент Open-Meteo Previous Runs API: архив прогнозов с заданным упреждением.
 
 Семантика по документации Open-Meteo (docs/FEATURE_AVAILABILITY.md): значение колонки
 `<var>_previous_dayN` в час T — «the value that was predicted N*24 hours before valid time»,
 то есть из прогона, инициализированного не позже чем за N суток до T. Выпуск «в день D
 на 48 часов» = previous_day1 для часов дня D+1 и previous_day2 для часов дня D+2; это
-скользящий набор прогонов дня D, а не один прогон. Фактическая погода сюда попасть не может.
+скользящий набор прогонов, а не один прогон. Это прогнозы, не реанализ; точное время
+публикации значений в кэше отсутствует, доступность к концу D отдельно не доказана.
 Все ответы кэшируются в data/weather_cache/ — повторные запуски работают офлайн.
 """
 from __future__ import annotations
@@ -146,14 +147,14 @@ def _day_index(day: pd.Timestamp) -> pd.DatetimeIndex:
 
 
 def _issued_day(weather: pd.DataFrame, day: pd.Timestamp, lead: int) -> pd.DataFrame | None:
-    """Полные 24 часа дня `day` из колонок lead `lead`; None — если дня в архиве нет вовсе.
+    """Полные 24 часа дня `day`; None — только за временной границей архива.
 
     Пропавшие внутри дня часы становятся NaN-строками, а не склеиваются с соседями:
     иначе лаги и окна в build_features сдвинулись бы по времени незаметно.
     """
     hours = _day_index(day)
     sel = weather.loc[hours[0]:hours[-1]]
-    if sel.empty:
+    if day < weather.index.min().normalize() or day > weather.index.max().normalize():
         return None
     suffix = f"__d{lead}"
     cols = {c: c[: -len(suffix)] for c in sel.columns if c.endswith(suffix)}
@@ -175,16 +176,20 @@ def issue_dates(weather: pd.DataFrame) -> list[str]:
 
 
 def get_issued_forecast(issue_date: str, weather: pd.DataFrame) -> pd.DataFrame:
-    """Срез «что было доступно в день issue_date»: 48 часов D+1 (lead 1) и D+2 (lead 2).
+    """Срез выпуска по принятой схеме: 48 часов D+1 (lead 1) и D+2 (lead 2).
 
     Возвращает длинный DataFrame: индекс datetime (naive, Asia/Almaty), колонки
     {model}__{var} + lead_day (int). Каждый присутствующий день — ровно 24 строки;
-    отсутствующий в архиве день (край архива) пропускается, поэтому на последнем дне
-    архива срез состоит из 24 часов lead 1. Ровно эту функцию использует и обучение
+    день D+2 после конца архива пропускается; внутренние разрывы остаются NaN,
+    чтобы валидация не приняла их за допустимый край. Последний выпуск содержит
+    24 часа lead 1. Ровно эту функцию использует и обучение
     (src/features/build.py), чтобы признаки строились из одного и того же выпуска.
     """
     _check_archive_index(weather)
     d = pd.Timestamp(date.fromisoformat(issue_date))
+    first = d + timedelta(days=1)
+    if weather.empty or not weather.index.min().normalize() <= first <= weather.index.max().normalize():
+        raise ValueError(f"первый день прогноза {first.date()} вне границ архива")
     rows = []
     for lead in LEAD_DAYS:
         part = _issued_day(weather, d + timedelta(days=lead), lead)

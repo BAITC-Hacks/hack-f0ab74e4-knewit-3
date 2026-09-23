@@ -16,9 +16,9 @@ predict. Это РЕТРОСПЕКТИВНАЯ оценка, а не нетро�
 выбор конфигурации. Февральского факта у команды нет — точность февраля не
 изобретается.
 
-Каждый оценочный час встречается дважды (lead 1 из выпуска D-1 и lead 2 из
-выпуска D-2); строки НЕ усредняются — правило агрегации: его нет, каждая пара
-(выпуск, целевой час) остаётся отдельной строкой, метрики группируются по lead_day.
+Оценочные часы встречаются с lead 1 и lead 2, кроме lead 2 за 01.12: его выпуск
+29.11 предшествует отсечке обучения модели и исключён. Строки не усредняются;
+метрики группируются по lead_day, полнота воспроизведения указана в coverage.
 
 Команда пишет только в --output-dir: канонические forecasts/ и models_artifacts/
 не трогаются, LLM не вызывается, сеть не нужна (погодный кэш в репозитории).
@@ -59,21 +59,32 @@ def split_masks(index: pd.DatetimeIndex) -> tuple[np.ndarray, np.ndarray, np.nda
 
 def _fit_evaluation_models(weather: pd.DataFrame, output_dir: Path) -> dict:
     """Посадка оцениваемой конфигурации с отсечкой 2025-11-30, артефакты — в output_dir."""
-    from src.features.build import training_matrix
+    from src.features.build import issued_feature_stack, training_matrix
     from src.features.dataset import load_hourly
     from src.models.train import save_artifact, select_and_fit
 
+    stack = issued_feature_stack(weather)
     selections = {}
     for turbine in TURBINES:
         hourly = load_hourly(turbine)
-        X, y = training_matrix(weather, hourly["target"])
+        X, y = training_matrix(weather, hourly["target"], stack=stack,
+                               target_end=f"{TRAINED_THROUGH} 23:00")
         fit, tune, ev = split_masks(X.index)
         assert not ((fit | tune) & ev).any(), "оценочные цели попали в обучение"
         artifact, sel = select_and_fit(X, y, fit, tune, fit | tune)
         save_artifact(artifact, turbine, output_dir)
         sel.pop("tune_pred_baseline"), sel.pop("tune_pred_lgb")
+        sel["features"] = artifact["features"]
         selections[str(turbine)] = sel
     return selections
+
+
+def _issue_range() -> tuple[date, date]:
+    # Условный выпуск в конце дня: цели всего дня trained_through уже известны.
+    # Более ранний выпуск не мог пользоваться этой обученной моделью.
+    first = max(date.fromisoformat(EVAL_PERIOD[0]) - timedelta(days=2),
+                date.fromisoformat(TRAINED_THROUGH))
+    return first, date.fromisoformat(EVAL_PERIOD[1]) - timedelta(days=1)
 
 
 def _replay(weather: pd.DataFrame, output_dir: Path) -> tuple[pd.DataFrame, list[dict]]:
@@ -85,10 +96,7 @@ def _replay(weather: pd.DataFrame, output_dir: Path) -> tuple[pd.DataFrame, list
 
     eval_lo = pd.Timestamp(EVAL_PERIOD[0])
     eval_hi = pd.Timestamp(f"{EVAL_PERIOD[1]} 23:59")
-    # выпуск D покрывает D+1 (lead 1) и D+2 (lead 2): чтобы каждый оценочный час
-    # получил оба горизонта, выпуски идут с EVAL-2 дней по EVAL_END-1 день
-    first = date.fromisoformat(EVAL_PERIOD[0]) - timedelta(days=2)
-    last = date.fromisoformat(EVAL_PERIOD[1]) - timedelta(days=1)
+    first, last = _issue_range()
 
     truth = {
         t: load_hourly(t)[["power", "target"]]  # power — все наблюдаемые, target — чистые
@@ -155,6 +163,11 @@ def _group_metrics(df: pd.DataFrame) -> dict:
 def compute_metrics(csv_path: Path | str) -> dict:
     """Метрики строго из сохранённого CSV — то, что записано, то и оценивается."""
     df = pd.read_csv(csv_path)
+    for column in ("power_pred", "power_baseline"):
+        invalid = ~np.isfinite(df[column].to_numpy(dtype=float))
+        if invalid.any():
+            raise ValueError(f"{column}: {int(invalid.sum())} нечисловых прогнозов; "
+                             "оценка остановлена, строки не исключаются из MAE молча")
     observed = df[df["power_true"].notna()]
     clean = observed[observed["target_eligible"]]
 
@@ -179,11 +192,39 @@ def compute_metrics(csv_path: Path | str) -> dict:
     return metrics
 
 
+def _replay_coverage(predictions: pd.DataFrame) -> dict:
+    """Ожидаемые пары из протокола, независимо от наличия погоды и факта SCADA."""
+    first, last = _issue_range()
+    hours = pd.date_range(EVAL_PERIOD[0], f"{EVAL_PERIOD[1]} 23:00", freq="h")
+    expected = {
+        (t, issue.isoformat(), hour.strftime("%Y-%m-%d %H:%M:%S"), lead)
+        for hour in hours for lead in (1, 2) for t in TURBINES
+        if first <= (issue := hour.date() - timedelta(days=lead)) <= last
+    }
+    keys = ["turbine", "issue_date", "datetime", "lead_day"]
+    actual = set(predictions[keys].itertuples(index=False, name=None))
+    if len(actual) != len(predictions):
+        raise ValueError("дубли пар (турбина, выпуск, целевой час, горизонт) в оценке")
+    if actual - expected:
+        raise ValueError("оценочные строки вне периодов или горизонтов протокола")
+    return {
+        "expected_rows": len(expected), "actual_rows": len(actual),
+        "missing_rows": len(expected - actual),
+        "excluded_before_model_cutoff": len(hours) * 2 * len(TURBINES) - len(expected),
+        "by_lead": {str(lead): {
+            "expected_rows": sum(key[3] == lead for key in expected),
+            "actual_rows": sum(key[3] == lead for key in actual),
+        } for lead in (1, 2)},
+    }
+
+
 def run_evaluation(output_dir: Path | str, weather: pd.DataFrame | None = None) -> dict:
     import lightgbm
     import sklearn
 
-    from src.config import TEST_END, TRAIN_START
+    from src.config import TEST_END, TIMEZONE, TRAIN_START, WEATHER_POINT
+    from src.models.train import (EARLY_STOPPING_ROUNDS, LGB_PARAMS,
+                                  QUANTILE_ALPHAS, SEEDS)
     from src.weather.openmeteo import get_weather
 
     output = Path(output_dir)
@@ -198,6 +239,7 @@ def run_evaluation(output_dir: Path | str, weather: pd.DataFrame | None = None) 
 
     print("Воспроизведение по датам выпуска...")
     predictions, skipped = _replay(weather, output)
+    coverage = _replay_coverage(predictions)
     csv_path = output / CSV_NAME
     predictions.to_csv(csv_path, index=False)
 
@@ -211,11 +253,19 @@ def run_evaluation(output_dir: Path | str, weather: pd.DataFrame | None = None) 
         "trained_through": TRAINED_THROUGH,
         "aggregation_rule": ("нет усреднения: каждая пара (выпуск, целевой час) — "
                              "отдельная строка; метрики группируются по lead_day"),
-        "issue_range": [(date.fromisoformat(EVAL_PERIOD[0]) - timedelta(days=2)).isoformat(),
-                        (date.fromisoformat(EVAL_PERIOD[1]) - timedelta(days=1)).isoformat()],
+        "issue_range": [day.isoformat() for day in _issue_range()],
+        "issue_time_assumption": "конец дня; задержки публикации SCADA/NWP не моделируются",
+        "coverage": coverage,
         "config": {
             "weather_models": WEATHER_MODELS,
+            "weather_point": list(WEATHER_POINT), "timezone": TIMEZONE,
+            "weather_columns": list(weather.columns),
+            "feature_builder": "build_features(get_issued_forecast(issue_date, weather))",
             "turbines": list(TURBINES),
+            "lgb_params": LGB_PARAMS,
+            "ensemble_seeds": list(SEEDS),
+            "quantile_alphas": list(QUANTILE_ALPHAS),
+            "early_stopping_rounds": EARLY_STOPPING_ROUNDS,
             "selection": selections,
         },
         "model_artifacts": {str(t): f"turbine_{t}.pkl" for t in TURBINES},

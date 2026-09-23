@@ -188,6 +188,25 @@ def test_missing_interior_hour_is_nan_row_not_glued_neighbour():
     assert len(X_tr) == 47
 
 
+@pytest.mark.parametrize("lead", [1, 2])
+def test_whole_interior_day_stays_in_forecast_as_missing(lead):
+    archive = make_archive()
+    missing_day = day(2 + lead)
+    archive = archive[archive.index.normalize() != missing_day]
+    sl = openmeteo.get_issued_forecast(issue(2), archive)
+    assert len(sl) == 48
+    missing = sl[sl.index.normalize() == missing_day]
+    assert len(missing) == 24
+    assert missing.drop(columns="lead_day").isna().all().all()
+    assert missing["lead_day"].eq(lead).all()
+
+
+def test_issue_before_archive_cannot_publish_only_lead_two():
+    archive = make_archive()
+    with pytest.raises(ValueError, match="первый день"):
+        openmeteo.get_issued_forecast(issue(-2), archive)
+
+
 def test_missing_source_values_drop_only_rows_without_ensemble_wind():
     archive, target = make_archive(), make_target(make_archive())
     bad_hours = archive.index[(archive.index.normalize() == day(3)) & (archive.index.hour < 3)]

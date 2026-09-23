@@ -166,3 +166,105 @@ def test_metrics_json_roundtrip(tmp_path):
     path = tmp_path / "evaluation_predictions.csv"
     df.to_csv(path, index=False)
     json.dumps(compute_metrics(path))
+
+
+@pytest.mark.parametrize("column", ["power_pred", "power_baseline"])
+@pytest.mark.parametrize("invalid", [np.nan, np.inf])
+def test_metrics_reject_nonfinite_predictions(tmp_path, column, invalid):
+    """Пропуск прогноза не должен превращаться в MAE=0 с завышенным n."""
+    rows = pd.DataFrame({
+        "turbine": [1, 1], "lead_day": [1, 1],
+        "power_true": [0.2, 0.8], "power_pred": [0.2, 0.8],
+        "power_baseline": [0.2, 0.8], "target_eligible": [True, True],
+        "power_p10": [0.1, 0.7], "power_p90": [0.3, 0.9],
+    })
+    rows.loc[1, column] = invalid
+    path = tmp_path / "invalid.csv"
+    rows.to_csv(path, index=False)
+    with pytest.raises(ValueError, match=column):
+        compute_metrics(path)
+
+
+def test_replay_never_precedes_model_training_cutoff(monkeypatch, tmp_path):
+    from src.backtest.evaluate import _replay
+    from src.features import dataset
+    from src.models import predict as inference
+
+    index = pd.date_range(EVAL_PERIOD[0], f"{EVAL_PERIOD[1]} 23:00", freq="h")
+    weather = pd.DataFrame({
+        "test__wind_speed_100m__d1": 5.0,
+        "test__wind_speed_100m__d2": 6.0,
+    }, index=index)
+    monkeypatch.setattr(dataset, "load_hourly", lambda turbine: pd.DataFrame(
+        {"power": 0.5, "target": 0.5}, index=index))
+
+    def predict_without_fit(turbine, features, artifacts_dir=None):
+        return pd.DataFrame({"power_pred": 0.5, "power_baseline": 0.5,
+                             "lead_day": features["lead_day"]}, index=features.index)
+
+    monkeypatch.setattr(inference, "predict", predict_without_fit)
+    rows, skipped = _replay(weather, tmp_path)
+    assert not skipped
+    assert rows["issue_date"].min() == TRAINED_THROUGH
+    assert (rows["issue_date"] >= rows["trained_through"]).all()
+    assert len(rows) == 5904
+    first_day = rows[rows["datetime"].str.startswith(EVAL_PERIOD[0])]
+    assert set(first_day["lead_day"]) == {1}
+
+
+def test_evaluation_fit_reuses_stack_and_cuts_targets(monkeypatch, tmp_path, synthetic):
+    from src.backtest.evaluate import _fit_evaluation_models
+    from src.features import build, dataset
+    from src.models import train
+
+    X, y = synthetic
+    calls = []
+    stack = (X, pd.DataFrame({"datetime": X.index}))
+
+    def build_once(weather):
+        calls.append(weather)
+        return stack
+
+    monkeypatch.setattr(build, "issued_feature_stack", build_once)
+    monkeypatch.setattr(dataset, "load_hourly", lambda turbine: y.to_frame("target"))
+
+    def fit_without_trees(features, targets, fit, tune, final):
+        assert features.index.max() <= pd.Timestamp(f"{TRAINED_THROUGH} 23:00")
+        assert features.index.equals(targets.index)
+        return {"features": list(features.columns)}, {
+            "tune_pred_baseline": [], "tune_pred_lgb": [], "n_members": 5,
+        }
+
+    monkeypatch.setattr(train, "select_and_fit", fit_without_trees)
+    monkeypatch.setattr(train, "save_artifact", lambda *args: None)
+    selections = _fit_evaluation_models(pd.DataFrame(), tmp_path)
+    assert len(calls) == 1
+    assert selections["1"]["features"] == list(X.columns)
+    assert selections["2"]["features"] == list(X.columns)
+
+
+def test_report_records_configuration_and_missing_replay_rows(monkeypatch, tmp_path):
+    from src.backtest import evaluate
+    from src.models.train import EARLY_STOPPING_ROUNDS, QUANTILE_ALPHAS, SEEDS
+
+    rows = pd.DataFrame({
+        "turbine": [1], "issue_date": [TRAINED_THROUGH],
+        "datetime": [f"{EVAL_PERIOD[0]} 00:00:00"], "lead_day": [1],
+        "power_true": [0.5], "power_pred": [0.4], "power_baseline": [0.5],
+        "power_p10": [0.1], "power_p90": [0.9], "target_eligible": [True],
+        "trained_through": [TRAINED_THROUGH],
+    })
+    monkeypatch.setattr(evaluate, "_fit_evaluation_models", lambda *args: {
+        "1": {"features": ["ens_ws_mean"], "n_members": 5},
+    })
+    monkeypatch.setattr(evaluate, "_replay", lambda *args: (rows, []))
+    report = evaluate.run_evaluation(tmp_path, weather=pd.DataFrame())
+    assert report["issue_range"][0] == TRAINED_THROUGH
+    assert report["config"]["lgb_params"] == LGB_PARAMS
+    assert report["config"]["ensemble_seeds"] == list(SEEDS)
+    assert report["config"]["quantile_alphas"] == list(QUANTILE_ALPHAS)
+    assert report["config"]["early_stopping_rounds"] == EARLY_STOPPING_ROUNDS
+    assert report["coverage"]["expected_rows"] == 5904
+    assert report["coverage"]["actual_rows"] == 1
+    assert report["coverage"]["missing_rows"] == 5903
+    assert report["coverage"]["excluded_before_model_cutoff"] == 48

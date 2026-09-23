@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 # LightGBM требует libgomp для OpenMP
 RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 \

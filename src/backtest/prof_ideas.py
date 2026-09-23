@@ -19,8 +19,8 @@ import lightgbm as lgb
 import numpy as np
 import pandas as pd
 
-from src.config import HOLDOUT_START, TEST_END, TRAIN_END, TRAIN_START
-from src.features.build import training_matrix
+from src.config import HOLDOUT_END, HOLDOUT_START, TEST_END, TRAIN_END, TRAIN_START
+from src.features.build import issued_feature_stack, training_matrix
 from src.features.dataset import load_hourly
 from src.models.train import LGB_PARAMS
 from src.weather.openmeteo import get_weather
@@ -56,11 +56,13 @@ def recent_power_features(index: pd.DatetimeIndex, lead: pd.Series,
 
 def run() -> None:
     weather = get_weather(TRAIN_START, TEST_END)
+    stack = issued_feature_stack(weather)
     print(f"погода: {weather.shape}\n")
 
     for turbine in (1, 2):
         hourly = load_hourly(turbine)
-        X, y = training_matrix(weather, hourly["target"])
+        X, y = training_matrix(weather, hourly["target"], stack=stack,
+                               target_end=f"{HOLDOUT_END} 23:00")
         tr = (X.index >= TRAIN_START) & (X.index <= f"{TRAIN_END} 23:59")
         ho = X.index >= HOLDOUT_START
         Xtr, ytr, Xho, yho = X[tr], y[tr], X[ho], y[ho]

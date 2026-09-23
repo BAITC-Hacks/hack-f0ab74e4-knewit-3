@@ -25,7 +25,7 @@ from sklearn.isotonic import IsotonicRegression
 
 from src.config import (ARTIFACTS, HOLDOUT_END, HOLDOUT_START, TRAIN_END,
                         TRAIN_START)
-from src.features.build import training_matrix
+from src.features.build import issued_feature_stack, training_matrix
 from src.features.dataset import load_hourly
 
 LGB_PARAMS = dict(
@@ -124,13 +124,15 @@ def save_artifact(artifact: dict, turbine: int, artifacts_dir: Path | str) -> Pa
 
 
 def train_turbine(turbine: int, weather: pd.DataFrame,
-                  artifacts_dir: Path | str | None = None) -> dict:
+                  artifacts_dir: Path | str | None = None, *,
+                  stack: tuple[pd.DataFrame, pd.DataFrame] | None = None) -> dict:
     """Канонический артефакт сдачи: подбор на 12.2025–01.2026, посадка на всём."""
     hourly = load_hourly(turbine)
-    X, y = training_matrix(weather, hourly["target"])
+    X, y = training_matrix(weather, hourly["target"], stack=stack,
+                           target_end=f"{HOLDOUT_END} 23:00")
 
     tr = (X.index >= TRAIN_START) & (X.index <= f"{TRAIN_END} 23:59")
-    ho = X.index >= HOLDOUT_START
+    ho = (X.index >= HOLDOUT_START) & (X.index <= f"{HOLDOUT_END} 23:00")
 
     artifact, sel = select_and_fit(X, y, tr, ho, tr | ho)
     save_artifact(artifact, turbine, artifacts_dir or ARTIFACTS)
@@ -170,7 +172,8 @@ def train_turbine(turbine: int, weather: pd.DataFrame,
 def train_all(weather: pd.DataFrame,
               artifacts_dir: Path | str | None = None) -> dict:
     directory = Path(artifacts_dir or ARTIFACTS)
-    reports = {t: train_turbine(t, weather, directory) for t in (1, 2)}
+    stack = issued_feature_stack(weather)
+    reports = {t: train_turbine(t, weather, directory, stack=stack) for t in (1, 2)}
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "train_report.json").write_text(json.dumps(reports, indent=2))
     return reports
