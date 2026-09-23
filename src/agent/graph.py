@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import time
+from pathlib import Path
 from typing import Callable
 
 from src.agent import tools as T
@@ -34,8 +35,9 @@ class DayGraph:
     контекст. Ошибка расчёта завершает день с трассой и исключением для CLI.
     """
 
-    def __init__(self, issue_date: str, weather, mode: str = "no-llm"):
-        self.ctx = T.DayContext(issue_date, weather)
+    def __init__(self, issue_date: str, weather, mode: str = "no-llm", *, output_dir: Path | None = None):
+        self.ctx = T.DayContext(issue_date, weather,
+                               output_dir=output_dir if output_dir is not None else FORECASTS)
         self.mode = mode
         self.node: str | None = ENTRY
         self.outputs: dict[str, dict] = {}
@@ -60,8 +62,8 @@ class DayGraph:
                            "ms": ms, "output": output, "attempt": 2 if self.retried else 1,
                            "next_tool": self.node})
         try:
-            FORECASTS.mkdir(parents=True, exist_ok=True)
-            path = FORECASTS / f"trace_{self.ctx.issue_date}.json"
+            self.ctx.output_dir.mkdir(parents=True, exist_ok=True)
+            path = self.ctx.output_dir / f"trace_{self.ctx.issue_date}.json"
             # Замена файла не даёт панели прочитать недописанный JSON между шагами.
             temp = path.with_suffix(".json.tmp")
             temp.write_text(json.dumps(self.result(), ensure_ascii=False, indent=1), encoding="utf-8")
@@ -142,8 +144,9 @@ class DayGraph:
         return self.result()
 
 
-def run_graph(issue_date: str, weather, analysis_fn: Callable[[dict, T.DayContext], str]) -> dict:
-    return DayGraph(issue_date, weather).finish(analysis_fn)
+def run_graph(issue_date: str, weather, analysis_fn: Callable[[dict, T.DayContext], str],
+              *, output_dir: Path | None = None) -> dict:
+    return DayGraph(issue_date, weather, output_dir=output_dir).finish(analysis_fn)
 
 
 def graph_topology() -> dict:

@@ -8,16 +8,16 @@
 
 Гипотеза B — временная персистентность: добавить признаки недавней фактической
 выработки, доступной на момент выпуска прогноза (до конца дня D включительно).
-Утечки нет: для цели в дне D+L берётся агрегат по 48 часам, закончившимся в D 23:00.
+Для цели в дне D+L берётся агрегат по 48 часам, закончившимся в D 23:00.
+Применение к подаче требует фактической мощности на эти даты, которой в феврале нет.
 
-Обе меряются на том же holdout 12.2025-01.2026, что и основная модель.
+Обе сравниваются на периоде настройки 12.2025–01.2026; это ретроспективный эксперимент.
 """
 from __future__ import annotations
 
 import lightgbm as lgb
 import numpy as np
 import pandas as pd
-from sklearn.isotonic import IsotonicRegression
 
 from src.config import HOLDOUT_START, TEST_END, TRAIN_END, TRAIN_START
 from src.features.build import training_matrix
@@ -79,8 +79,7 @@ def run() -> None:
         calib = lgb.LGBMRegressor(**{**LGB_PARAMS, "objective": "regression"})
         calib.fit(X[ok_tr], wind_meas[ok_tr])
         wind_ho = calib.predict(Xho)
-        wind_tr_pred = calib.predict(Xtr)
-        print(f"          калибровка ветра: MAE={mae(wind_meas[ho.nonzero()[0]].dropna() if False else wind_meas[ho], wind_ho):.3f} м/с, "
+        print(f"          калибровка ветра: MAE={mae(wind_meas[ho], wind_ho):.3f} м/с, "
               f"сырой NWP: {mae(wind_meas[ho], Xho['ens_ws_mean']):.3f} м/с")
 
         # ступень 2 учится на ВСЕЙ истории (с марта 2023), а не только с архива прогнозов
