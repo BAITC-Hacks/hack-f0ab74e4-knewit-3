@@ -1,0 +1,115 @@
+{
+ "issue_date": "2026-01-31",
+ "retried": false,
+ "trace": [
+  {
+   "node": "fetch_weather",
+   "label": "Получение архивного прогноза погоды",
+   "status": "ok",
+   "ms": 3.6,
+   "output": {
+    "issue_date": "2026-01-31",
+    "hours": 48,
+    "period": [
+     "2026-02-01 00:00:00",
+     "2026-02-02 23:00:00"
+    ],
+    "wind100_mean_ms": 7.25,
+    "wind100_max_ms": 11.56,
+    "hours_without_any_model": 0,
+    "models_present": [
+     "best_match",
+     "ecmwf_ifs025",
+     "gfs_seamless",
+     "icon_seamless",
+     "ukmo_global_deterministic_10km"
+    ]
+   },
+   "attempt": 1
+  },
+  {
+   "node": "prepare_features",
+   "label": "Подготовка признаков",
+   "status": "ok",
+   "ms": 19.3,
+   "output": {
+    "rows": 48,
+    "n_features": 108,
+    "na_fraction": 0.0116
+   },
+   "attempt": 1
+  },
+  {
+   "node": "run_model",
+   "label": "Запуск моделей обеих турбин",
+   "status": "ok",
+   "ms": 656.0,
+   "output": {
+    "turbine_1": {
+     "mean": 0.315,
+     "max": 0.905,
+     "hours": 48,
+     "expected_energy_norm_24h": 3.4
+    },
+    "turbine_2": {
+     "mean": 0.306,
+     "max": 0.906,
+     "hours": 48,
+     "expected_energy_norm_24h": 3.22
+    }
+   },
+   "attempt": 1
+  },
+  {
+   "node": "validate_forecast",
+   "label": "Физическая валидация прогноза",
+   "status": "ok",
+   "ms": 0.3,
+   "output": {
+    "ok": true,
+    "checks": {
+     "turbine_1": {
+      "in_bounds_0_1": true,
+      "hours_ok": true,
+      "hours": 48,
+      "has_nan": false,
+      "flatline": false
+     },
+     "turbine_2": {
+      "in_bounds_0_1": true,
+      "hours_ok": true,
+      "hours": 48,
+      "has_nan": false,
+      "flatline": false
+     }
+    }
+   },
+   "attempt": 1
+  },
+  {
+   "node": "compare_with_previous",
+   "label": "Сравнение с прошлым запуском",
+   "status": "ok",
+   "ms": 0.3,
+   "output": {
+    "turbine_1": "нет предыдущего запуска",
+    "turbine_2": "нет предыдущего запуска"
+   },
+   "attempt": 1
+  },
+  {
+   "node": "write_outputs",
+   "label": "Запись прогноза и отчёта",
+   "status": "ok",
+   "ms": 0.0,
+   "output": {
+    "files": [
+     "forecast_t1_2026-01-31.csv",
+     "forecast_t2_2026-01-31.csv"
+    ],
+    "report": "report_2026-01-31.md"
+   },
+   "attempt": 1
+  }
+ ]
+}

@@ -1,0 +1,125 @@
+{
+ "issue_date": "2026-02-06",
+ "retried": false,
+ "trace": [
+  {
+   "node": "fetch_weather",
+   "label": "Получение архивного прогноза погоды",
+   "status": "ok",
+   "ms": 2.3,
+   "output": {
+    "issue_date": "2026-02-06",
+    "hours": 48,
+    "period": [
+     "2026-02-07 00:00:00",
+     "2026-02-08 23:00:00"
+    ],
+    "wind100_mean_ms": 7.79,
+    "wind100_max_ms": 15.93,
+    "hours_without_any_model": 0,
+    "models_present": [
+     "best_match",
+     "ecmwf_ifs025",
+     "gfs_seamless",
+     "icon_seamless",
+     "ukmo_global_deterministic_10km"
+    ]
+   },
+   "attempt": 1
+  },
+  {
+   "node": "prepare_features",
+   "label": "Подготовка признаков",
+   "status": "ok",
+   "ms": 18.8,
+   "output": {
+    "rows": 48,
+    "n_features": 108,
+    "na_fraction": 0.0116
+   },
+   "attempt": 1
+  },
+  {
+   "node": "run_model",
+   "label": "Запуск моделей обеих турбин",
+   "status": "ok",
+   "ms": 56.8,
+   "output": {
+    "turbine_1": {
+     "mean": 0.466,
+     "max": 0.988,
+     "hours": 48,
+     "expected_energy_norm_24h": 7.45
+    },
+    "turbine_2": {
+     "mean": 0.465,
+     "max": 0.975,
+     "hours": 48,
+     "expected_energy_norm_24h": 7.36
+    }
+   },
+   "attempt": 1
+  },
+  {
+   "node": "validate_forecast",
+   "label": "Физическая валидация прогноза",
+   "status": "ok",
+   "ms": 0.2,
+   "output": {
+    "ok": true,
+    "checks": {
+     "turbine_1": {
+      "in_bounds_0_1": true,
+      "hours_ok": true,
+      "hours": 48,
+      "has_nan": false,
+      "flatline": false
+     },
+     "turbine_2": {
+      "in_bounds_0_1": true,
+      "hours_ok": true,
+      "hours": 48,
+      "has_nan": false,
+      "flatline": false
+     }
+    }
+   },
+   "attempt": 1
+  },
+  {
+   "node": "compare_with_previous",
+   "label": "Сравнение с прошлым запуском",
+   "status": "ok",
+   "ms": 2.8,
+   "output": {
+    "turbine_1": {
+     "hours_overlap": 24,
+     "mean_abs_update": 0.111,
+     "max_abs_update": 0.347,
+     "significant_update": true
+    },
+    "turbine_2": {
+     "hours_overlap": 24,
+     "mean_abs_update": 0.112,
+     "max_abs_update": 0.362,
+     "significant_update": true
+    }
+   },
+   "attempt": 1
+  },
+  {
+   "node": "write_outputs",
+   "label": "Запись прогноза и отчёта",
+   "status": "ok",
+   "ms": 0.0,
+   "output": {
+    "files": [
+     "forecast_t1_2026-02-06.csv",
+     "forecast_t2_2026-02-06.csv"
+    ],
+    "report": "report_2026-02-06.md"
+   },
+   "attempt": 1
+  }
+ ]
+}

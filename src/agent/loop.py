@@ -58,25 +58,29 @@ def _run_tool(name: str, args: dict, ctx: T.DayContext) -> dict:
     return {"error": f"неизвестный тул {name}"}
 
 
-def run_day_no_llm(issue_date: str, weather: pd.DataFrame) -> dict:
-    """Детерминированный цикл без LLM (для судей без ключей)."""
-    ctx = T.DayContext(issue_date, weather)
-    w = T.fetch_weather(ctx)
-    f = T.prepare_features(ctx)
-    m = T.run_model(ctx)
-    v = T.validate_forecast(ctx)
-    c = T.compare_with_previous(ctx)
-    analysis = (
-        f"Режим без LLM (детерминированный конвейер).\n\n"
-        f"- Погода: средний ветер 100м {w['wind100_mean_ms']} м/с, макс {w['wind100_max_ms']} м/с, "
-        f"часов без данных: {w['hours_without_any_model']}.\n"
-        f"- Фичи: {f['rows']} часов x {f['n_features']} признаков.\n"
+def _template_analysis(outputs: dict, _ctx: T.DayContext) -> str:
+    """Отчёт детерминированного режима — из выходов узлов графа."""
+    w = outputs.get("fetch_weather", {})
+    f = outputs.get("prepare_features", {})
+    m = outputs.get("run_model", {})
+    v = outputs.get("validate_forecast", {})
+    c = outputs.get("compare_with_previous", {})
+    return (
+        f"Режим без LLM (детерминированный обход графа).\n\n"
+        f"- Погода: средний ветер 100м {w.get('wind100_mean_ms')} м/с, "
+        f"макс {w.get('wind100_max_ms')} м/с, часов без данных: "
+        f"{w.get('hours_without_any_model')}.\n"
+        f"- Признаки: {f.get('rows')} часов x {f.get('n_features')}.\n"
         f"- Прогноз: {json.dumps(m, ensure_ascii=False)}.\n"
-        f"- Валидация: {'OK' if v['ok'] else 'ПРОБЛЕМЫ: ' + json.dumps(v['checks'], ensure_ascii=False)}.\n"
+        f"- Валидация: {'OK' if v.get('ok') else 'ПРОБЛЕМЫ: ' + json.dumps(v.get('checks', {}), ensure_ascii=False)}.\n"
         f"- Сравнение с прошлым запуском: {json.dumps(c, ensure_ascii=False)}.\n"
     )
-    out = T.write_outputs(ctx, analysis)
-    return {"issue_date": issue_date, "validation_ok": v["ok"], **out}
+
+
+def run_day_no_llm(issue_date: str, weather: pd.DataFrame) -> dict:
+    """Детерминированный обход графа состояний (для судей без ключей)."""
+    from src.agent.graph import run_graph
+    return run_graph(issue_date, weather, _template_analysis)
 
 
 def run_day_llm(issue_date: str, weather: pd.DataFrame) -> dict:

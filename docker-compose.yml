@@ -1,0 +1,13 @@
+services:
+  windcast:
+    build: .
+    image: windcast:latest
+    ports:
+      - "8501:8501"
+    # Ключ нужен только для LLM-режима агента; без него работает --no-llm
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      # Прогнозы и отчёты видны на хосте, а не запираются в контейнере
+      - ./forecasts:/app/forecasts
