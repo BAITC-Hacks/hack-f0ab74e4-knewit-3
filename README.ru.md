@@ -89,20 +89,47 @@ model runs, and publication delays can push some fields beyond day D. The CLI ha
 готовая подача (пересобрана с `--no-llm`, см. [статус](#-статус-проекта)). После установки
 зависимостей сеть и API-ключи **не нужны**: режим `--no-llm` даёт те же числа прогноза.
 
+**Среда:** Git-доступ к этому приватному репозиторию и **Python 3.12** на Linux/macOS,
+либо Docker с Compose v2. Проверены Python 3.12.6 и 3.12.14; новые минорные версии не проверены.
+Для LightGBM на macOS нужен `brew install libomp`; на Debian/Ubuntu —
+`sudo apt-get update && sudo apt-get install -y libgomp1`. В Docker библиотека уже есть.
+Установка требует сети; затем проверка использует сохранённый кэш.
+Если репозиторий уже открыт, пропустите `git clone` и `cd`. Команды выполняются из его корня.
+
 ```bash
-python3.12 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt                       # ~1–2 мин, единственный шаг с сетью
-
-# 1) Целостность подачи: 1344 turbine-hours, [0,1], 48 ч на выпуск (27.02 — 24 ч), свежайший выпуск на каждый час
-python -m scripts.verify_submission                   # ожидается: OK: 1344 turbine-hours
-
-# 2) Строгая репетиция: прогнозы и оценка, manifest, неизменность канонических файлов, сеть заблокирована
-python -m scripts.reproduce --output-dir runs/judge-check          # допуск 1e-9; каталог пустой или новый
-
-# 3) Тесты и панель оператора
-python -m pytest tests/ -q                            # ожидается: 145 passed
-streamlit run app.py -- --forecast-dir runs/judge-check              # http://localhost:8501
+git clone https://github.com/BAITC-Hacks/hack-f0ab74e4-knewit-3.git
+cd hack-f0ab74e4-knewit-3
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+python -m scripts.verify_submission
+WINDCAST_RUN_DIR="runs/judge-$(python -c 'import uuid; print(uuid.uuid4().hex[:8])')"
+python -m scripts.reproduce --output-dir "$WINDCAST_RUN_DIR"
+python -m pytest tests/ -q
+python -m streamlit run app.py -- --forecast-dir "$WINDCAST_RUN_DIR"
 ```
+
+Каждая репетиция получает новый каталог, поэтому повторный запуск сохраняет прежние результаты.
+Все команды выполняйте в одном терминале. Панель работает до Ctrl+C; открывать её необязательно.
+
+### Автоматическая проверка и частые проблемы
+
+- **AI-агент / headless:** достаточно `verify_submission`, `reproduce` и `pytest` из блока выше.
+  Ключ, `.env`, обучение и браузер не нужны. Проверяйте коды выхода и
+  `$WINDCAST_RUN_DIR/reproduction_report.json`: восемь успешных проверок, 1344 строки подачи,
+  5904 строки оценки, допуск `1e-9`; тесты — 145 passed, 0 skipped.
+- Воспроизведение проверяет совпадение сохранённых результатов. Метрики точности находятся
+  отдельно в `models_artifacts/evaluation/evaluation_report.json`; факта февраля у команды нет.
+- **Нет доступа к репозиторию:** организаторы должны выдать GitHub-доступ. LLM-ключ этого не заменяет.
+- **Ошибка libomp/libgomp:** установите библиотеку выше или используйте Docker.
+  При ошибке установки на Python 3.13+ пересоздайте окружение с Python 3.12.
+- **Каталог результатов непустой:** задайте новый путь; удалять результаты или использовать
+  `--overwrite` не требуется. Сохраните `data/`, `models_artifacts/`, `forecasts/` для сверки.
+- **Порт занят:** добавьте `--server.port 8502` перед `--` в команде Streamlit.
+- **Красный GitHub Actions:** на 23.09.2026 биллинг организации организаторов не позволяет
+  запустить раннер. Это не результат тестирования кода; локальные Linux-проверки и команды
+  описаны в [REPRODUCIBILITY](docs/REPRODUCIBILITY.md).
+
 
 Команда создаёт 28 выпусков, подачу на 1344 строки и `reproduction_report.json`; код 0 означает успешную
 проверку всех условий, включая 5904 строки оценки. На macOS / Linux проверка заняла 7.3 / 11.4 с:
@@ -359,15 +386,16 @@ flowchart TB
 ## 🚀 Запуск
 
 <details open>
-<summary><b>Локально · Python 3.12+</b></summary>
+<summary><b>Локально · Python 3.12</b></summary>
 
 ```bash
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+python3.12 -m venv .venv && source .venv/bin/activate
+python -m pip install -r requirements.txt
 
-python -m scripts.reproduce --output-dir runs/judge-check
+WINDCAST_RUN_DIR="runs/judge-$(python -c 'import uuid; print(uuid.uuid4().hex[:8])')"
+python -m scripts.reproduce --output-dir "$WINDCAST_RUN_DIR"
 python -m pytest tests/ -q
-streamlit run app.py -- --forecast-dir runs/judge-check
+python -m streamlit run app.py -- --forecast-dir "$WINDCAST_RUN_DIR"
 ```
 
 Без `--output-dir` CLI пишет в `forecasts/`, без `--forecast-dir` панель читает оттуда. В offline-режиме CLI
@@ -379,8 +407,8 @@ streamlit run app.py -- --forecast-dir runs/judge-check
 <summary><b>Docker</b></summary>
 
 ```bash
-docker compose up --build            # сохранённые модели, без обучения; панель http://localhost:8501
-docker compose run --rm reproduce    # сеть отключена, допуск 1e-9; новый/пустой runs/reproduction-docker
+docker compose up --build -d            # сохранённые модели, без обучения; панель http://localhost:8501
+docker compose run --rm --build reproduce    # сеть отключена, допуск 1e-9; новый/пустой runs/reproduction-docker
 ```
 
 Каталог `forecasts/` подключён с хоста только для чтения. Образ содержит обе группы сохранённых моделей.
@@ -393,8 +421,12 @@ docker compose run --rm reproduce    # сеть отключена, допуск
 <details>
 <summary><b>Режим LLM-агента</b></summary>
 
+Необязательно: после копирования **отредактируйте `.env` и замените пример настоящим ключом**.
+Для Claude укажите `LLM_BACKEND=anthropic` и соответствующий `LLM_MODEL`; пример ключа OpenAI удалите.
+`list-models` опрашивает только OpenAI-совместимые API. Проверки выше ключа не требуют.
+
 ```bash
-cp .env.example .env                 # OPENAI_API_KEY (или ANTHROPIC_API_KEY / NVIDIA NIM), см. комментарии в файле
+test -e .env || cp .env.example .env                 # OPENAI_API_KEY (или ANTHROPIC_API_KEY / NVIDIA NIM), см. комментарии в файле
 python -m src.cli list-models        # какие модели доступны по вашему ключу
 python -m src.cli run-agent --start 2026-02-10 --end 2026-02-10 --output-dir runs/llm-demo
 streamlit run app.py -- --forecast-dir runs/llm-demo
@@ -412,7 +444,7 @@ API или `mode=anthropic` для Claude. Без ключа выполняет�
 
 ```bash
 python -m src.cli train                                    # переобучение → ЗАМЕНЯЕТ models_artifacts/
-python -m src.cli check-tz                                 # лаг максимальной корреляции прогноз/факт ветра = 0
+python -m src.cli check-tz                                 # диагностика часового сдвига; максимум корреляции не доказывает часовой пояс
 python -m src.backtest.evaluate --output-dir runs/eval     # ретроспективная оценка по протоколу
 python -m scripts.compare_runs --a forecasts --b runs/x    # разница двух прогонов
 python -m src.backtest.experiments                         # пространственные градиенты (ADR-007)
@@ -450,7 +482,7 @@ python -m src.backtest.prof_ideas                          # двухступе�
 ├── forecasts/                                ← КАНОНИЧЕСКИЙ РЕЗУЛЬТАТ (обновляет только интегратор)
 │   ├── submission.csv                        ← 1344 строки, февраль 2026
 │   ├── forecast_t{1,2}_YYYY-MM-DD.csv        ← 28 × 2 CSV: 48 часов; последний выпуск — 24
-│   ├── report_YYYY-MM-DD.md                  ← отчёт агента оператору
+│   ├── report_YYYY-MM-DD.md                  ← шаблонный отчёт оператору (--no-llm)
 │   └── trace_YYYY-MM-DD.json                 ← трасса графа: узлы, статусы, время, next_tool
 ├── scripts/verify_submission.py · compare_runs.py · plot_holdout.py
 ├── tests/                                    ← 145 тестов

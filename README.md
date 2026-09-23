@@ -65,25 +65,57 @@ Everything is in the repository: the organisers' data, the cache of every weathe
 the rebuilt submission and its offline reports. After installing dependencies, **no network and
 no API keys are needed** — `--no-llm` yields the same forecast numbers.
 
+**Prerequisites:** Git access to this private repository and **Python 3.12** on Linux/macOS,
+or Docker with Compose v2. Python 3.12.6 and 3.12.14 were tested; newer minor versions were not.
+On macOS, LightGBM needs `brew install libomp`; on Debian/Ubuntu it needs
+`sudo apt-get update && sudo apt-get install -y libgomp1`. Docker includes this library.
+Installation needs internet access; the verification below then runs from the committed cache.
+
 ```bash
-python3.12 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt                       # ~1–2 min, the only step that needs network
+git clone https://github.com/BAITC-Hacks/hack-f0ab74e4-knewit-3.git
+cd hack-f0ab74e4-knewit-3                              # skip clone/cd if already at the repo root
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
 
 # 1) Submission integrity: 1344 turbine-hours, [0,1], 48 h per issue (27 Feb — 24 h), freshest issue per hour
 python -m scripts.verify_submission                   # expected: OK: 1344 turbine-hours
 
 # 2) Offline replay, evaluation, manifest and numeric comparison (new or empty output directory)
-python -m scripts.reproduce --output-dir runs/judge-check
+WINDCAST_RUN_DIR="runs/judge-$(python -c 'import uuid; print(uuid.uuid4().hex[:8])')"
+python -m scripts.reproduce --output-dir "$WINDCAST_RUN_DIR"
 
 # 3) Tests and the operator dashboard
 python -m pytest tests/ -q                            # expected: 145 passed
-streamlit run app.py -- --forecast-dir runs/judge-check              # http://localhost:8501
+python -m streamlit run app.py -- --forecast-dir "$WINDCAST_RUN_DIR"  # http://localhost:8501
 ```
+
+Run these commands in the same terminal. Each replay gets a new directory, so repeating the
+check preserves previous results. The dashboard stays running until Ctrl+C; opening it is optional.
 
 You will see 28 completed issues and eight `OK` checks, including 1344 submission rows and 5904 evaluation rows.
 The dashboard shows the agent's execution graph with per-node timing, the hourly forecast with its P10–P90 band,
 the spread of the five NWP sources, the agent's report and a structured log.
 Step-by-step route: [`docs/JUDGE_GUIDE.md`](docs/JUDGE_GUIDE.md) (RU).
+
+### Automated review and common setup issues
+
+- **Headless / AI reviewer:** run `scripts.verify_submission`, `scripts.reproduce` and `pytest` above.
+  A browser, `.env`, LLM key, training and live weather download are not required. Check exit codes;
+  the replay writes a machine-readable `reproduction_report.json` inside `$WINDCAST_RUN_DIR`.
+- **Expected evidence:** 145 tests with zero skips; eight replay checks pass; 1344 submission rows
+  and 5904 evaluation rows match at `1e-9`. Reproduction proves saved-result consistency;
+  accuracy is reported separately in `models_artifacts/evaluation/evaluation_report.json`.
+- **Repository unavailable:** the organiser must grant your GitHub account access. An API key for
+  an LLM does not grant repository access. Run all commands from the cloned repository root.
+- **`libomp` / `libgomp` error:** install the system library listed above, or use Docker below.
+  If dependency installation fails on Python 3.13+, recreate the environment with Python 3.12.
+- **Output directory is not empty:** choose a new directory; no deletion or `--overwrite` is needed.
+  Keep the supplied `data/`, `models_artifacts/` and `forecasts/` intact for verification.
+- **Port 8501 is busy:** add `--server.port 8502` before the `--` in the Streamlit command.
+- **Red GitHub Actions checks:** as of 23 September 2026, the organisers' organisation billing
+  lock prevents runners from starting. This is not a test result. Local macOS/Linux evidence
+  and repeatable commands are in [REPRODUCIBILITY](docs/REPRODUCIBILITY.md).
 
 <details>
 <summary><b>🔍 One cycle day under the microscope (demo scenario)</b></summary>
@@ -319,16 +351,16 @@ evaluation* reads the saved `models_artifacts/evaluation/` predictions — the f
 ## 🚀 Running
 
 <details open>
-<summary><b>Locally · Python 3.12+</b></summary>
+<summary><b>Locally · Python 3.12</b></summary>
 
 ```bash
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+python3.12 -m venv .venv && source .venv/bin/activate
+python -m pip install -r requirements.txt
 
-python -m src.cli run-agent --start 2026-01-31 --end 2026-02-27 --no-llm --output-dir runs/judge-check
-python -m scripts.verify_submission --directory runs/judge-check
+WINDCAST_RUN_DIR="runs/judge-$(python -c 'import uuid; print(uuid.uuid4().hex[:8])')"
+python -m scripts.reproduce --output-dir "$WINDCAST_RUN_DIR"
 python -m pytest tests/ -q
-streamlit run app.py -- --forecast-dir runs/judge-check
+python -m streamlit run app.py -- --forecast-dir "$WINDCAST_RUN_DIR"
 ```
 
 Without `--output-dir` the CLI writes to `forecasts/`; without `--forecast-dir` the dashboard reads from there.
@@ -341,13 +373,17 @@ In offline mode the CLI protects existing LLM reports; `--overwrite` explicitly 
 <summary><b>Docker</b></summary>
 
 ```bash
-docker compose up --build            # dashboard on http://localhost:8501
-docker compose run --rm reproduce    # no network, strict tolerance 1e-9
+docker compose up --build -d         # dashboard on http://localhost:8501; returns to the terminal
+docker compose run --rm --build reproduce  # no network, strict tolerance 1e-9
+docker compose down                 # stop the dashboard after review
 ```
 
 The image includes the checked models, cache and forecasts; it does not train during the build.
 The dashboard mounts `forecasts/` read-only. Reproduction writes to `runs/reproduction-docker`,
 which must be new or empty. All eight checks passed locally on macOS and Linux.
+To repeat without deleting results, override the output path:
+`docker compose run --rm reproduce python -m scripts.reproduce --output-dir /app/runs/reproduction-docker-2`.
+Use a current Docker Compose v2 with support for optional `env_file` entries; Windows users can use Docker Desktop.
 
 GitHub Actions jobs currently cannot start because the organisation account has a billing lock.
 An organisation owner must resolve it and rerun the workflow. Local verification and the exact
@@ -358,8 +394,13 @@ commands are recorded in [`docs/REPRODUCIBILITY.md`](docs/REPRODUCIBILITY.md).
 <details>
 <summary><b>LLM agent mode</b></summary>
 
+Optional: after copying the example, **edit `.env` and replace the placeholder with your real key**
+before running the next command. For Claude, set `LLM_BACKEND=anthropic` and the matching
+`LLM_MODEL`, and remove the OpenAI placeholder. Keep only the provider you intend to use; `list-models` queries
+OpenAI-compatible endpoints, not Anthropic. Verification above does not need this setup.
+
 ```bash
-cp .env.example .env                 # OPENAI_API_KEY (or ANTHROPIC_API_KEY / NVIDIA NIM), see comments in the file
+test -e .env || cp .env.example .env                 # OPENAI_API_KEY (or ANTHROPIC_API_KEY / NVIDIA NIM), see comments in the file
 python -m src.cli list-models        # which models your key can access
 python -m src.cli run-agent --start 2026-02-10 --end 2026-02-10 --output-dir runs/llm-demo
 streamlit run app.py -- --forecast-dir runs/llm-demo
@@ -415,7 +456,7 @@ Full list with side effects: [`docs/EXPERIMENTS.md`](docs/EXPERIMENTS.md).
 ├── forecasts/                                ← CANONICAL OUTPUT (updated only by the integrator)
 │   ├── submission.csv                        ← 1344 rows, February 2026
 │   ├── forecast_t{1,2}_YYYY-MM-DD.csv        ← 28 × 2 CSV: 48 hours; the last issue — 24
-│   ├── report_YYYY-MM-DD.md                  ← agent report for the operator (LLM)
+│   ├── report_YYYY-MM-DD.md                  ← operator report (current bundle: --no-llm template)
 │   └── trace_YYYY-MM-DD.json                 ← graph trace: nodes, statuses, timing, next_tool
 ├── scripts/verify_submission.py · compare_runs.py · plot_holdout.py
 ├── tests/                                    ← 145 tests

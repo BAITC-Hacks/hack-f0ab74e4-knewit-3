@@ -68,20 +68,48 @@
 модельдер, дайын тапсыру файлы (`--no-llm` режимінде қайта құрылған). Тәуелділіктерді орнатқаннан кейін **желі де, API
 кілттері де қажет емес**: `--no-llm` режимі болжамның дәл сол сандарын береді.
 
+**Орта:** осы жабық репозиторийге GitHub арқылы қолжетімділік және Linux/macOS жүйесінде
+**Python 3.12**, немесе Compose v2 бар Docker. Python 3.12.6 және 3.12.14 тексерілген;
+жаңа минор нұсқалар тексерілмеген. LightGBM үшін macOS-та `brew install libomp`,
+Debian/Ubuntu-да `sudo apt-get update && sudo apt-get install -y libgomp1` қажет.
+Docker ішінде бұл кітапхана бар. Орнатуға желі керек; кейін тексеру сақталған кэшті пайдаланады.
+Репозиторий ашық болса, `git clone` мен `cd` қадамдарын өткізіңіз. Командалар түбірден орындалады.
+
 ```bash
-python3.12 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt                       # ~1–2 мин, желі қажет жалғыз қадам
-
-# 1) Тапсыру файлының тұтастығы: 1344 turbine-hours, [0,1], әр шығарылымға 48 сағ (27.02 — 24 сағ), әр сағатқа ең жаңа шығарылым
-python -m scripts.verify_submission                   # күтілетіні: OK: 1344 turbine-hours
-
-# 2) Қатаң тексеру: болжамдар, бағалау, manifest, канондық файлдар өзгермейді; желі бұғатталған
-python -m scripts.reproduce --output-dir runs/judge-check          # дәлдік шегі 1e-9; каталог бос немесе жаңа
-
-# 3) Тесттер және оператор панелі
-python -m pytest tests/ -q                            # күтілетіні: 145 passed
-streamlit run app.py -- --forecast-dir runs/judge-check              # http://localhost:8501
+git clone https://github.com/BAITC-Hacks/hack-f0ab74e4-knewit-3.git
+cd hack-f0ab74e4-knewit-3
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+python -m scripts.verify_submission
+WINDCAST_RUN_DIR="runs/judge-$(python -c 'import uuid; print(uuid.uuid4().hex[:8])')"
+python -m scripts.reproduce --output-dir "$WINDCAST_RUN_DIR"
+python -m pytest tests/ -q
+python -m streamlit run app.py -- --forecast-dir "$WINDCAST_RUN_DIR"
 ```
+
+Әр тексеруге жаңа каталог беріледі: қайта іске қосу бұрынғы нәтижелерді сақтайды.
+Командаларды бір терминалда орындаңыз. Панель Ctrl+C басылғанша жұмыс істейді; оны ашу міндетті емес.
+
+### Автоматты тексеру және жиі кездесетін мәселелер
+
+- **AI-агент / headless:** жоғарыдағы `verify_submission`, `reproduce`, `pytest` жеткілікті.
+  Кілт, `.env`, оқыту және браузер қажет емес. Шығу кодтарын және
+  `$WINDCAST_RUN_DIR/reproduction_report.json` файлын тексеріңіз: сегіз сәтті тексеру,
+  1344 тапсыру жолы, 5904 бағалау жолы, `1e-9` дәлдік шегі; тесттер — 145 passed, 0 skipped.
+- Қайта орындау сақталған нәтижелердің сәйкестігін тексереді. Дәлдік метрикалары бөлек
+  `models_artifacts/evaluation/evaluation_report.json` ішінде; ақпанның нақты нәтижелері командада жоқ.
+- **Репозиторий ашылмайды:** ұйымдастырушылар GitHub арқылы қолжетімділік беруі керек.
+  LLM API кілті репозиторийге қолжетімділік бермейді.
+- **libomp/libgomp қатесі:** жоғарыдағы кітапхананы орнатыңыз немесе Docker қолданыңыз.
+  Python 3.13+ нұсқасында орнату қатесі болса, ортаны Python 3.12 арқылы қайта жасаңыз.
+- **Нәтиже каталогы бос емес:** жаңа жолды таңдаңыз; ескі нәтижелерді өшіру немесе
+  `--overwrite` қолдану қажет емес. Тексеру үшін `data/`, `models_artifacts/`, `forecasts/` сақтаңыз.
+- **Порт бос емес:** Streamlit командасында `--` алдында `--server.port 8502` қосыңыз.
+- **GitHub Actions қызыл белгісі:** 23.09.2026 күні ұйымдастырушылар ұйымының биллингі
+  раннерді іске қосуды бұғаттап тұр. Бұл код тестінің нәтижесі емес; жергілікті Linux
+  тексерулері [REPRODUCIBILITY](docs/REPRODUCIBILITY.md) ішінде көрсетілген.
+
 
 Команда 28 шығарылым, 1344 жолдық тапсыру файлы және `reproduction_report.json` жасайды; 0 коды барлық
 тексерудің, соның ішінде бағалаудың 5904 жолын салыстырудың сәтті өткенін білдіреді. macOS / Linux-та
@@ -328,15 +356,16 @@ flowchart TB
 ## 🚀 Іске қосу
 
 <details open>
-<summary><b>Жергілікті · Python 3.12+</b></summary>
+<summary><b>Жергілікті · Python 3.12</b></summary>
 
 ```bash
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+python3.12 -m venv .venv && source .venv/bin/activate
+python -m pip install -r requirements.txt
 
-python -m scripts.reproduce --output-dir runs/judge-check
+WINDCAST_RUN_DIR="runs/judge-$(python -c 'import uuid; print(uuid.uuid4().hex[:8])')"
+python -m scripts.reproduce --output-dir "$WINDCAST_RUN_DIR"
 python -m pytest tests/ -q
-streamlit run app.py -- --forecast-dir runs/judge-check
+python -m streamlit run app.py -- --forecast-dir "$WINDCAST_RUN_DIR"
 ```
 
 `--output-dir` болмаса CLI `forecasts/` ішіне жазады, `--forecast-dir` болмаса панель сол жерден оқиды.
@@ -349,8 +378,8 @@ Offline режимде CLI бар LLM есептерін қорғайды; `--ov
 <summary><b>Docker</b></summary>
 
 ```bash
-docker compose up --build            # сақталған модельдер, оқытусыз; панель http://localhost:8501
-docker compose run --rm reproduce    # желі өшірулі, дәлдік шегі 1e-9; жаңа/бос runs/reproduction-docker
+docker compose up --build -d            # сақталған модельдер, оқытусыз; панель http://localhost:8501
+docker compose run --rm --build reproduce    # желі өшірулі, дәлдік шегі 1e-9; жаңа/бос runs/reproduction-docker
 ```
 
 `forecasts/` каталогы хосттан тек оқуға қосылған. Образда сақталған модельдердің екі тобы да бар;
@@ -363,8 +392,12 @@ docker compose run --rm reproduce    # желі өшірулі, дәлдік ш�
 <details>
 <summary><b>LLM-агент режимі</b></summary>
 
+Міндетті емес: көшіргеннен кейін **`.env` файлын өңдеп, мысалды нақты кілтпен ауыстырыңыз**.
+Claude үшін `LLM_BACKEND=anthropic` және сәйкес `LLM_MODEL` орнатыңыз; OpenAI мысал кілтін алып тастаңыз.
+`list-models` тек OpenAI-үйлесімді API-ларды сұрайды. Жоғарыдағы тексерулерге кілт қажет емес.
+
 ```bash
-cp .env.example .env                 # OPENAI_API_KEY (немесе ANTHROPIC_API_KEY / NVIDIA NIM), файлдағы түсініктемелерді қараңыз
+test -e .env || cp .env.example .env                 # OPENAI_API_KEY (немесе ANTHROPIC_API_KEY / NVIDIA NIM), файлдағы түсініктемелерді қараңыз
 python -m src.cli list-models        # кілтіңізге қандай модельдер қолжетімді
 python -m src.cli run-agent --start 2026-02-10 --end 2026-02-10 --output-dir runs/llm-demo
 streamlit run app.py -- --forecast-dir runs/llm-demo
