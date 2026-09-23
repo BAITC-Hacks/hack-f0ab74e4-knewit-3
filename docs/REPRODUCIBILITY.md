@@ -94,6 +94,15 @@ docker run --rm --network none windcast:latest \
 HTTP 200 панели не заменяет `AppTest`: оба режима UI проверяют существующие тесты в задании
 `linux`. Ссылка: `https://github.com/BAITC-Hacks/hack-f0ab74e4-knewit-3/actions/workflows/reproducibility.yml`.
 
+**Состояние на 23.09.2026.** Первый запуск на ветке `dev/release-rehearsal`
+(run 35854882460, коммит `10b8e14`) завершился за 4 с без единого шага и без раннера;
+аннотация GitHub: «The job was not started because your account is locked due to a billing
+issue». Это блокер на стороне организации `BAITC-Hacks` (hosted-раннеры для приватного
+репозитория), а не ошибка workflow: файл проверен `actionlint` без замечаний, все `run`-блоки
+проходят `bash -n`. Пока биллинг не разблокирован, CI-подтверждения нет; его заменяют локальные
+Linux-проверки из раздела 5, выполненные теми же командами. После разблокировки достаточно
+повторно запустить workflow вручную (`workflow_dispatch`) или сделать любой push в ветку.
+
 ## 4. Выполненные проверки (23.09.2026, ветка `dev/release-rehearsal`)
 
 База — `08ad3406d48e7bb848d07bcbdbeb9b6b1b9d5335` (origin/main, содержит `22cf7d2`).
@@ -119,6 +128,7 @@ Docker Desktop 29.2.1 на macOS (движок linux/aarch64), сборка `pyt
 | Шаг | Результат |
 | --- | --- |
 | `docker build -t windcast:rehearsal .` | 1 мин 30 с; проверка при сборке прошла: модели читаются без предупреждения версии, `OK: 1344 turbine-hours`; образ 1.41 ГБ на диске (300 МБ содержимого) |
+| `docker run --rm --network none … pytest tests/ -q -rs` | 92 прошли, 0 пропущено, 8.1 с — те же тесты, что в задании `linux` CI, на Python 3.12.13/glibc |
 | `docker run --rm --network none … scripts.reproduce --tolerance 0.05` | все 8 проверок OK за 5.7 с; Python 3.12.13, Linux-6.12 linuxkit aarch64, glibc 2.41; подача 1344 строки, 1292/1344 точнее `1e-9`, max `2.65e-2`; оценка 5904 строк, 5522/5904 точнее `1e-9`, max `3.14e-2`; метрики из CSV совпали точно; канонические файлы не изменились |
 | то же без `--tolerance` | код выхода 1: `forecast_match` и `evaluation_replay` отказали с теми же максимумами — допуск по умолчанию расхождение платформ не прячет |
 | `docker compose --profile check run --rm reproduce` | OK, отчёт в `runs/reproduction-docker/` |
