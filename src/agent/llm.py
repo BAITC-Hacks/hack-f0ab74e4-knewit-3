@@ -2,7 +2,8 @@
 
 - anthropic: Claude через Anthropic API (ANTHROPIC_API_KEY)
 - openai-совместимый: любой эндпоинт с tool calling — OpenAI, NVIDIA NIM
-  (LLM_BASE_URL, LLM_API_KEY, LLM_MODEL). NVIDIA: base_url=https://integrate.api.nvidia.com/v1
+  (LLM_BASE_URL, OPENAI_API_KEY или LLM_API_KEY, LLM_MODEL).
+  NVIDIA: base_url=https://integrate.api.nvidia.com/v1
 
 Оба гоняют один и тот же цикл над одними тулами; выбор — деталь среды, не архитектуры.
 """
@@ -67,16 +68,21 @@ def openai_chat_loop(system: str, tool_defs: list[dict], user_msg: str,
                      run_tool, max_steps: int = 16) -> str | None:
     """OpenAI-совместимый эндпоинт (OpenAI / NVIDIA NIM) через httpx, без SDK."""
     base = os.environ.get("LLM_BASE_URL", "https://api.openai.com/v1").rstrip("/")
-    key = os.environ["LLM_API_KEY"]
-    model = os.environ.get("LLM_MODEL", "gpt-4.1-mini")
+    key = os.environ.get("LLM_API_KEY") or os.environ["OPENAI_API_KEY"]
+    model = os.environ.get("LLM_MODEL", "gpt-6-luna")
     oa_tools = [{"type": "function",
                  "function": {"name": t["name"], "description": t["description"],
                               "parameters": t["input_schema"]}} for t in tool_defs]
     messages = [{"role": "system", "content": system},
                 {"role": "user", "content": user_msg}]
     for _ in range(max_steps):
-        data = _openai_post(base, key, {"model": model, "messages": messages,
-                                        "tools": oa_tools, "max_tokens": 2500})
+        payload = {"model": model, "messages": messages, "tools": oa_tools}
+        if model.startswith(("gpt-6-luna", "gpt-6-sol")):
+            # У GPT-6 в Chat Completions тулы доступны только без reasoning.
+            payload.update(reasoning_effort="none", max_completion_tokens=2500)
+        else:
+            payload["max_tokens"] = 2500
+        data = _openai_post(base, key, payload)
         msg = data["choices"][0]["message"]
         calls = msg.get("tool_calls") or []
         if not calls:
@@ -95,16 +101,16 @@ def openai_chat_loop(system: str, tool_defs: list[dict], user_msg: str,
 
 
 def pick_backend() -> str:
-    """Явный LLM_BACKEND > LLM_API_KEY > ANTHROPIC_API_KEY > none.
+    """Явный LLM_BACKEND > ключ OpenAI > ANTHROPIC_API_KEY > none.
 
-    LLM_API_KEY выигрывает намеренно: это имя задаётся только в .env проекта, тогда как
+    Ключ OpenAI выигрывает намеренно: он задаётся в .env проекта, тогда как
     ANTHROPIC_API_KEY часто висит в окружении разработчика от сторонних инструментов —
     иначе настроенный OpenAI-ключ молча игнорировался бы.
     """
     explicit = os.environ.get("LLM_BACKEND", "").strip().lower()
     if explicit in ("openai", "anthropic", "none"):
         return explicit
-    if os.environ.get("LLM_API_KEY"):
+    if os.environ.get("LLM_API_KEY") or os.environ.get("OPENAI_API_KEY"):
         return "openai"
     if os.environ.get("ANTHROPIC_API_KEY"):
         return "anthropic"
