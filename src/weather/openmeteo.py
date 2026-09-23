@@ -85,6 +85,48 @@ def get_weather(start: str, end: str, models: list[str] | None = None) -> pd.Dat
     return out.apply(pd.to_numeric, errors="coerce")
 
 
+def _fetch_point_chunk(model: str, start: str, end: str, lat: float, lon: float,
+                       variables: list[str]) -> dict:
+    """Запрос для произвольной точки/набора переменных (пространственные фичи)."""
+    key = hashlib.md5(f"{model}|{start}|{end}|{lat}|{lon}|{','.join(variables)}".encode()).hexdigest()[:10]
+    path = WEATHER_CACHE / f"sp_{model}_{start}_{end}_{key}.json"
+    if path.exists():
+        return json.loads(path.read_text())
+    hourly = [f"{v}_previous_day{n}" for v in variables for n in LEAD_DAYS]
+    params = {"latitude": lat, "longitude": lon, "hourly": ",".join(hourly),
+              "models": model, "start_date": start, "end_date": end,
+              "timezone": TIMEZONE, "wind_speed_unit": "ms"}
+    r = httpx.get(API, params=params, timeout=120)
+    r.raise_for_status()
+    data = r.json()
+    if "hourly" not in data:
+        raise RuntimeError(f"Open-Meteo без hourly: {data}")
+    WEATHER_CACHE.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data))
+    return data
+
+
+def get_spatial_weather(start: str, end: str) -> pd.DataFrame:
+    """Прогнозы в 4 точках вокруг станции (N/S/E/W): колонки sp{dir}_{model}__{var}__dN."""
+    from src.config import SPATIAL_MODELS, SPATIAL_POINTS, SPATIAL_VARS
+    frames = []
+    for direction, (lat, lon) in SPATIAL_POINTS.items():
+        for model in SPATIAL_MODELS:
+            parts = []
+            for s, e in _chunks(start, end):
+                data = _fetch_point_chunk(model, s, e, lat, lon, SPATIAL_VARS)
+                df = pd.DataFrame(data["hourly"]).assign(
+                    time=lambda d: pd.to_datetime(d["time"])).set_index("time")
+                parts.append(df)
+            mdf = pd.concat(parts)
+            mdf.columns = [f"sp{direction}_{model}__{c.replace('_previous_day', '__d')}"
+                           for c in mdf.columns]
+            frames.append(mdf)
+    out = pd.concat(frames, axis=1)
+    out = out[~out.index.duplicated(keep="first")].sort_index()
+    return out.apply(pd.to_numeric, errors="coerce")
+
+
 def get_issued_forecast(issue_date: str, weather: pd.DataFrame) -> pd.DataFrame:
     """Срез «что было доступно в день issue_date»: 48 часов D+1 (lead 1) и D+2 (lead 2).
 

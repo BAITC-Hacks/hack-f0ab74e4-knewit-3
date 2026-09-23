@@ -41,8 +41,8 @@ def train_turbine(turbine: int, weather: pd.DataFrame) -> dict:
 
     # Baseline: изотоническая кривая мощности от ансамблевой скорости ветра
     iso = IsotonicRegression(y_min=0, y_max=1, out_of_bounds="clip")
-    iso.fit(Xtr["ens_ws100_mean"], ytr)
-    base_ho = iso.predict(Xho["ens_ws100_mean"])
+    iso.fit(Xtr["ens_ws_mean"], ytr)
+    base_ho = iso.predict(Xho["ens_ws_mean"])
 
     # Основная модель: LightGBM на всех прогнозных фичах, ранняя остановка по holdout
     model = lgb.LGBMRegressor(**LGB_PARAMS)
@@ -77,7 +77,7 @@ def train_turbine(turbine: int, weather: pd.DataFrame) -> dict:
     final = lgb.LGBMRegressor(**final_params)
     final.fit(X, y)
     iso_full = IsotonicRegression(y_min=0, y_max=1, out_of_bounds="clip")
-    iso_full.fit(X["ens_ws100_mean"], y)
+    iso_full.fit(X["ens_ws_mean"], y)
 
     ARTIFACTS.mkdir(exist_ok=True)
     with open(ARTIFACTS / f"turbine_{turbine}.pkl", "wb") as f:

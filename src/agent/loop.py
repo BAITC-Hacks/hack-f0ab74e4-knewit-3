@@ -79,32 +79,34 @@ def run_day_no_llm(issue_date: str, weather: pd.DataFrame) -> dict:
     return {"issue_date": issue_date, "validation_ok": v["ok"], **out}
 
 
-def run_day_llm(issue_date: str, weather: pd.DataFrame, model: str = "claude-sonnet-5") -> dict:
-    """Полноценный агент на Anthropic API."""
-    import anthropic
-    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+def run_day_llm(issue_date: str, weather: pd.DataFrame) -> dict:
+    """Полноценный агент: Claude (Anthropic API) или OpenAI-совместимый LLM (NVIDIA NIM/OpenAI).
+
+    Бэкенд выбирается по ключам окружения (src/agent/llm.py). Если агент не довёл цикл
+    до write_outputs — день достраивается детерминированно, прогноз не теряется."""
+    from src.agent.llm import anthropic_chat_loop, openai_chat_loop, pick_backend
+
+    backend = pick_backend()
+    if backend == "none":
+        return run_day_no_llm(issue_date, weather)
+
     ctx = T.DayContext(issue_date, weather)
-    messages = [{"role": "user", "content":
-                 f"День запуска: {issue_date}. Выполни полный цикл прогноза на 48 часов."}]
-    result = None
-    for _ in range(16):  # защита от зацикливания
-        resp = client.messages.create(model=model, max_tokens=2000, system=SYSTEM,
-                                      tools=TOOL_DEFS, messages=messages)
-        calls = [b for b in resp.content if b.type == "tool_use"]
-        if not calls:
-            break
-        messages.append({"role": "assistant", "content": resp.content})
-        results = []
-        for call in calls:
-            out = _run_tool(call.name, call.input, ctx)
-            if call.name == "write_outputs":
-                result = {"issue_date": issue_date,
-                          "validation_ok": bool(ctx.validation and ctx.validation["ok"]), **out}
-            results.append({"type": "tool_result", "tool_use_id": call.id,
-                            "content": json.dumps(out, ensure_ascii=False)})
-        messages.append({"role": "user", "content": results})
-        if result:
-            break
-    if result is None:  # агент не дописал — достраиваем детерминированно
+    result: dict | None = None
+
+    def run_tool(name: str, args: dict) -> dict:
+        nonlocal result
+        out = _run_tool(name, args, ctx)
+        if name == "write_outputs":
+            result = {"issue_date": issue_date,
+                      "validation_ok": bool(ctx.validation and ctx.validation["ok"]), **out}
+        return out
+
+    user_msg = f"День запуска: {issue_date}. Выполни полный цикл прогноза на 48 часов."
+    loop_fn = anthropic_chat_loop if backend == "anthropic" else openai_chat_loop
+    try:
+        loop_fn(SYSTEM, TOOL_DEFS, user_msg, run_tool)
+    except Exception as e:  # сеть/лимиты LLM не должны ронять прогон
+        print(f"  [{issue_date}] LLM-бэкенд {backend} упал ({e}), достраиваю без LLM")
+    if result is None:
         return run_day_no_llm(issue_date, weather)
     return result

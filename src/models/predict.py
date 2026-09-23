@@ -18,7 +18,7 @@ def predict(turbine: int, features: pd.DataFrame) -> pd.DataFrame:
     art = load_model(turbine)
     X = features.reindex(columns=art["features"])
     lgb_p = np.clip(art["lgb"].predict(X), 0, 1)
-    iso_p = art["iso"].predict(X["ens_ws100_mean"])
+    iso_p = art["iso"].predict(X["ens_ws_mean"])
     w = art["w_lgb"]
     out = pd.DataFrame(index=features.index)
     out["power_baseline"] = iso_p

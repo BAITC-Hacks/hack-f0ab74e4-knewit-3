@@ -52,7 +52,7 @@ def _build_submission() -> None:
     allp = pd.concat(frames)
     allp = (allp.sort_values(["turbine", "datetime", "lead_day"])
                 .groupby(["turbine", "datetime"], as_index=False).first())
-    allp = allp[allp["datetime"] >= "2026-02-01"]
+    allp = allp[(allp["datetime"] >= "2026-02-01") & (allp["datetime"] <= f"{TEST_END} 23:59")]
     out = FORECASTS / "submission.csv"
     allp[["turbine", "datetime", "lead_day", "power_pred"]].to_csv(out, index=False)
     print(f"Сводный прогноз: {out} ({len(allp)} строк, "

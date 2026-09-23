@@ -1,5 +1,20 @@
 """Константы проекта: координаты, периоды, источники погоды."""
+import os
 from pathlib import Path
+
+
+def _load_dotenv() -> None:
+    """Мини-загрузчик .env без сторонних зависимостей (секреты — ADR/CLAUDE.md п.6)."""
+    env = Path(__file__).resolve().parent.parent / ".env"
+    if env.exists():
+        for line in env.read_text().splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, _, v = line.partition("=")
+                os.environ.setdefault(k.strip(), v.strip())
+
+
+_load_dotenv()
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_RAW = ROOT / "data" / "raw"
@@ -21,8 +36,18 @@ HOLDOUT_END = "2026-01-31"
 TEST_START = "2026-02-01"     # тестовый период организаторов
 TEST_END = "2026-02-28"
 
-# Погодные модели Open-Meteo: мини-ансамбль источников
-WEATHER_MODELS = ["best_match", "ecmwf_ifs025", "gfs_seamless", "icon_seamless"]
+# Погодные модели Open-Meteo: мини-ансамбль источников.
+# Отбор по корреляции прогноза с измеренным ветром на holdout (см. RESEARCH.md):
+# ukmo 0.740, icon 0.735, ecmwf 0.724, best_match 0.703, gfs 0.655; jma/cma — шум, исключены.
+WEATHER_MODELS = ["best_match", "ecmwf_ifs025", "gfs_seamless", "icon_seamless",
+                  "ukmo_global_deterministic_10km"]
+
+# Пространственные точки вокруг станции (~±0.5°): градиенты давления через хребты —
+# движущая сила ветра в Шелекском коридоре (gap wind)
+SPATIAL_POINTS = {"N": (44.15, 78.5356), "S": (43.15, 78.5356),
+                  "E": (43.6452, 79.15), "W": (43.6452, 77.95)}
+SPATIAL_MODELS = ["best_match", "icon_seamless", "ecmwf_ifs025"]
+SPATIAL_VARS = ["surface_pressure", "wind_speed_100m", "temperature_2m"]
 
 # Базовые почасовые переменные (previous-runs добавляет суффикс _previous_dayN)
 WEATHER_VARS = [
