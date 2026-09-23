@@ -1,0 +1,32 @@
+"""Константы проекта: координаты, периоды, источники погоды."""
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+DATA_RAW = ROOT / "data" / "raw"
+WEATHER_CACHE = ROOT / "data" / "weather_cache"
+ARTIFACTS = ROOT / "models_artifacts"
+FORECASTS = ROOT / "forecasts"
+
+# Координаты турбин (из ссылок организаторов). Турбины в ~300 м — точка погоды одна.
+TURBINES = {1: (43.645150, 78.535604), 2: (43.643198, 78.538828)}
+WEATHER_POINT = (43.6452, 78.5356)
+
+TIMEZONE = "Asia/Almaty"  # таймзона датасета, ADR-006
+
+# Архив previous-runs покрыт с марта 2024 (проверено живыми запросами 23.09.2026)
+TRAIN_START = "2024-03-01"
+TRAIN_END = "2025-11-30"      # обучение
+HOLDOUT_START = "2025-12-01"  # holdout: декабрь 2025 + январь 2026
+HOLDOUT_END = "2026-01-31"
+TEST_START = "2026-02-01"     # тестовый период организаторов
+TEST_END = "2026-02-28"
+
+# Погодные модели Open-Meteo: мини-ансамбль источников
+WEATHER_MODELS = ["best_match", "ecmwf_ifs025", "gfs_seamless", "icon_seamless"]
+
+# Базовые почасовые переменные (previous-runs добавляет суффикс _previous_dayN)
+WEATHER_VARS = [
+    "wind_speed_10m", "wind_speed_80m", "wind_speed_100m", "wind_speed_120m",
+    "wind_direction_100m", "wind_gusts_10m", "temperature_2m", "surface_pressure",
+]
+LEAD_DAYS = [1, 2]  # прогноз, выпущенный за 1 и за 2 дня до валидного часа
