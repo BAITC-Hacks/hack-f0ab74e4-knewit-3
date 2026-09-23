@@ -13,18 +13,23 @@ import numpy as np
 import pandas as pd
 
 from src.config import WEATHER_MODELS
+from src.weather.openmeteo import get_issued_forecast, issue_dates
 
 R_AIR = 287.05  # Дж/(кг·К)
 
 
 def _model_block(df: pd.DataFrame, model: str) -> pd.DataFrame:
-    """Фичи одного погодного источника — из тех переменных, что у него есть."""
+    """Фичи одного погодного источника — из тех переменных, что у него есть.
+
+    Считается по переданному срезу: лаги/опережения/окна не выходят за его границы.
+    Обучение и инференс передают сюда срез одного выпуска (get_issued_forecast).
+    """
     p = f"{model}__"
     have = lambda v: f"{p}{v}" in df.columns and df[f"{p}{v}"].notna().any()
-    out = pd.DataFrame(index=df.index)
+    cols: dict[str, pd.Series] = {}
     for h in (10, 80, 100, 120):
         if have(f"wind_speed_{h}m"):
-            out[f"{model}_ws{h}"] = df[f"{p}wind_speed_{h}m"]
+            cols[f"{model}_ws{h}"] = df[f"{p}wind_speed_{h}m"]
     # основная скорость: высота ступицы ~100 м, иначе лучшее из доступного
     ws = None
     for v in ("wind_speed_100m", "wind_speed_120m", "wind_speed_80m", "wind_speed_10m"):
@@ -32,32 +37,32 @@ def _model_block(df: pd.DataFrame, model: str) -> pd.DataFrame:
             ws = df[f"{p}{v}"]
             break
     if ws is None:
-        return out
-    out[f"{model}_ws_main"] = ws
-    out[f"{model}_ws_cube"] = ws ** 3            # физика: P ~ rho * v^3
+        return pd.DataFrame(cols, index=df.index)
+    cols[f"{model}_ws_main"] = ws
+    cols[f"{model}_ws_cube"] = ws ** 3            # физика: P ~ rho * v^3
     if have("wind_gusts_10m"):
-        out[f"{model}_gust"] = df[f"{p}wind_gusts_10m"]
+        cols[f"{model}_gust"] = df[f"{p}wind_gusts_10m"]
     if have("wind_speed_120m") and have("wind_speed_10m"):
-        out[f"{model}_shear"] = (df[f"{p}wind_speed_120m"] - df[f"{p}wind_speed_10m"]).clip(lower=-20)
+        cols[f"{model}_shear"] = (df[f"{p}wind_speed_120m"] - df[f"{p}wind_speed_10m"]).clip(lower=-20)
     if have("wind_direction_100m"):
         wd = np.deg2rad(df[f"{p}wind_direction_100m"])
-        out[f"{model}_wd_sin"] = np.sin(wd)
-        out[f"{model}_wd_cos"] = np.cos(wd)
+        cols[f"{model}_wd_sin"] = np.sin(wd)
+        cols[f"{model}_wd_cos"] = np.cos(wd)
     if have("temperature_2m"):
-        out[f"{model}_temp"] = df[f"{p}temperature_2m"]
+        cols[f"{model}_temp"] = df[f"{p}temperature_2m"]
         if have("surface_pressure"):
             t_k = df[f"{p}temperature_2m"] + 273.15
             rho = (df[f"{p}surface_pressure"] * 100) / (R_AIR * t_k)
-            out[f"{model}_rho"] = rho
-            out[f"{model}_pwr_density"] = 0.5 * rho * ws ** 3  # Вт/м^2
+            cols[f"{model}_rho"] = rho
+            cols[f"{model}_pwr_density"] = 0.5 * rho * ws ** 3  # Вт/м^2
     # инерция и фазовые ошибки фронтов: лаги и окна по основной скорости
     for lag in (1, 2, 3):
-        out[f"{model}_ws_lag{lag}"] = ws.shift(lag)
-        out[f"{model}_ws_lead{lag}"] = ws.shift(-lag)
-    out[f"{model}_ws_roll3"] = ws.rolling(3, center=True, min_periods=1).mean()
-    out[f"{model}_ws_roll6"] = ws.rolling(6, center=True, min_periods=1).mean()
-    out[f"{model}_ws_rollstd6"] = ws.rolling(6, center=True, min_periods=2).std()
-    return out
+        cols[f"{model}_ws_lag{lag}"] = ws.shift(lag)
+        cols[f"{model}_ws_lead{lag}"] = ws.shift(-lag)
+    cols[f"{model}_ws_roll3"] = ws.rolling(3, center=True, min_periods=1).mean()
+    cols[f"{model}_ws_roll6"] = ws.rolling(6, center=True, min_periods=1).mean()
+    cols[f"{model}_ws_rollstd6"] = ws.rolling(6, center=True, min_periods=2).std()
+    return pd.DataFrame(cols, index=df.index)
 
 
 def _spatial_block(df: pd.DataFrame) -> pd.DataFrame:
@@ -106,16 +111,56 @@ def build_features(weather_slice: pd.DataFrame) -> pd.DataFrame:
     return X
 
 
-def training_matrix(weather: pd.DataFrame, target: pd.Series) -> tuple[pd.DataFrame, pd.Series]:
-    """Стек по lead_day: каждый час встречается с прогнозом за 1 и за 2 дня."""
-    parts_X, parts_y = [], []
-    for lead in (1, 2):
-        cols = {c: c.replace(f"__d{lead}", "") for c in weather.columns if c.endswith(f"__d{lead}")}
-        sl = weather[list(cols)].rename(columns=cols)
-        sl["lead_day"] = lead
-        X = build_features(sl)
-        y = target.reindex(X.index)
-        ok = y.notna() & X["ens_ws_mean"].notna()
-        parts_X.append(X[ok])
-        parts_y.append(y[ok])
-    return pd.concat(parts_X), pd.concat(parts_y)
+def issued_feature_stack(weather: pd.DataFrame,
+                         issues: list[str] | None = None) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Признаки всех выпусков архива — ровно так, как их строит ежедневный прогноз.
+
+    Для каждого дня выпуска D: build_features(get_issued_forecast(D, weather)). Строка
+    (D, целевой час) встречается один раз; каждый целевой час — дважды (lead 1 от D-1,
+    lead 2 от D-2), кроме краёв архива. Не зависит от турбины, поэтому считается один
+    раз на процесс и передаётся в training_matrix(stack=...).
+
+    Возвращает (X, meta): индекс X — целевой час; meta той же длины и порядка с колонками
+    issue_date (str), datetime, lead_day — происхождение каждой строки.
+    """
+    frames, metas = [], []
+    for issue_date in (issues if issues is not None else issue_dates(weather)):
+        X = build_features(get_issued_forecast(issue_date, weather))
+        frames.append(X)
+        metas.append(pd.DataFrame({"issue_date": issue_date, "datetime": X.index,
+                                   "lead_day": X["lead_day"].values}))
+    if not frames:
+        raise ValueError("в архиве нет ни одного выпуска")
+    # канонический порядок колонок: срез с наибольшим набором источников, затем остальные
+    canonical = list(max(frames, key=lambda f: f.shape[1]).columns)
+    extra = [c for f in frames for c in f.columns if c not in canonical]
+    canonical += list(dict.fromkeys(extra))
+    X_all = pd.concat([f.reindex(columns=canonical) for f in frames])
+    meta = pd.concat(metas, ignore_index=True)
+    return X_all, meta
+
+
+def training_matrix(weather: pd.DataFrame, target: pd.Series, *,
+                    target_end: str | pd.Timestamp | None = None,
+                    stack: tuple[pd.DataFrame, pd.DataFrame] | None = None,
+                    with_meta: bool = False):
+    """Обучающая матрица из тех же срезов выпусков, что и инференс.
+
+    Строка остаётся, если известен таргет и есть ансамблевая скорость ветра; таргет не
+    заполняется. target_end — верхняя граница целевых часов (данные позже отсечки в
+    обучение не попадают). stack — результат issued_feature_stack (повторное использование).
+    Возвращает (X, y) с одинаковым индексом целевых часов; with_meta=True добавляет meta.
+    """
+    X_all, meta = stack if stack is not None else issued_feature_stack(weather)
+    y = target.reindex(X_all.index)
+    ok = np.asarray(y.notna() & X_all["ens_ws_mean"].notna(), dtype=bool)
+    if target_end is not None:
+        ok = ok & np.asarray(X_all.index <= pd.Timestamp(target_end))
+    X, y, meta = X_all[ok], y[ok], meta[ok].reset_index(drop=True)
+    return (X, y, meta) if with_meta else (X, y)
+
+
+def training_provenance(weather: pd.DataFrame, target: pd.Series, *,
+                        target_end=None, stack=None) -> pd.DataFrame:
+    """Происхождение строк training_matrix: issue_date, datetime, lead_day (тот же порядок)."""
+    return training_matrix(weather, target, target_end=target_end, stack=stack, with_meta=True)[2]

@@ -1,8 +1,10 @@
 """Клиент Open-Meteo Previous Runs API: архивные прогнозы, доступные на момент прогнозирования.
 
-Семантика: значение колонки `<var>_previous_dayN` в час T — из прогона погодной модели,
-выпущенного за N суток до T. Прогноз «сделанный в день D на 48 часов» = previous_day1
-для часов дня D+1 и previous_day2 для часов дня D+2. Фактическая погода сюда попасть не может.
+Семантика по документации Open-Meteo (docs/FEATURE_AVAILABILITY.md): значение колонки
+`<var>_previous_dayN` в час T — «the value that was predicted N*24 hours before valid time»,
+то есть из прогона, инициализированного не позже чем за N суток до T. Выпуск «в день D
+на 48 часов» = previous_day1 для часов дня D+1 и previous_day2 для часов дня D+2; это
+скользящий набор прогонов дня D, а не один прогон. Фактическая погода сюда попасть не может.
 Все ответы кэшируются в data/weather_cache/ — повторные запуски работают офлайн.
 """
 from __future__ import annotations
@@ -127,22 +129,67 @@ def get_spatial_weather(start: str, end: str) -> pd.DataFrame:
     return out.apply(pd.to_numeric, errors="coerce")
 
 
+def _check_archive_index(weather: pd.DataFrame) -> None:
+    """Архив — почасовой naive-индекс в локальном времени Asia/Almaty (ADR-006)."""
+    idx = weather.index
+    if not isinstance(idx, pd.DatetimeIndex):
+        raise ValueError("индекс архива погоды должен быть DatetimeIndex (локальное время)")
+    if idx.tz is not None:
+        raise ValueError("индекс архива должен быть naive в Asia/Almaty, а не tz-aware "
+                         f"({idx.tz}); склейка с датасетом идёт по локальному времени")
+    if not idx.is_monotonic_increasing:
+        raise ValueError("индекс архива погоды должен быть отсортирован по времени")
+
+
+def _day_index(day: pd.Timestamp) -> pd.DatetimeIndex:
+    return pd.date_range(day, periods=24, freq="h")
+
+
+def _issued_day(weather: pd.DataFrame, day: pd.Timestamp, lead: int) -> pd.DataFrame | None:
+    """Полные 24 часа дня `day` из колонок lead `lead`; None — если дня в архиве нет вовсе.
+
+    Пропавшие внутри дня часы становятся NaN-строками, а не склеиваются с соседями:
+    иначе лаги и окна в build_features сдвинулись бы по времени незаметно.
+    """
+    hours = _day_index(day)
+    sel = weather.loc[hours[0]:hours[-1]]
+    if sel.empty:
+        return None
+    suffix = f"__d{lead}"
+    cols = {c: c[: -len(suffix)] for c in sel.columns if c.endswith(suffix)}
+    part = sel[list(cols)].rename(columns=cols).reindex(hours)
+    part["lead_day"] = lead
+    return part
+
+
+def issue_dates(weather: pd.DataFrame) -> list[str]:
+    """Дни выпуска D, для которых архив содержит день D+1 (lead 1).
+
+    Первый выпуск — за день до начала архива (у него есть D+1 и D+2), последний — за день
+    до конца архива (только D+1, 24 часа: край архива). Выпуск за два дня до начала архива
+    имел бы только lead 2 — такой формы инференс не производит, он исключён.
+    """
+    _check_archive_index(weather)
+    days = pd.DatetimeIndex(weather.index.normalize().unique())
+    return [(d - timedelta(days=1)).date().isoformat() for d in days]
+
+
 def get_issued_forecast(issue_date: str, weather: pd.DataFrame) -> pd.DataFrame:
     """Срез «что было доступно в день issue_date»: 48 часов D+1 (lead 1) и D+2 (lead 2).
 
-    Возвращает длинный DataFrame: индекс datetime, колонки {model}__{var} + lead_day.
+    Возвращает длинный DataFrame: индекс datetime (naive, Asia/Almaty), колонки
+    {model}__{var} + lead_day (int). Каждый присутствующий день — ровно 24 строки;
+    отсутствующий в архиве день (край архива) пропускается, поэтому на последнем дне
+    архива срез состоит из 24 часов lead 1. Ровно эту функцию использует и обучение
+    (src/features/build.py), чтобы признаки строились из одного и того же выпуска.
     """
-    d = date.fromisoformat(issue_date)
+    _check_archive_index(weather)
+    d = pd.Timestamp(date.fromisoformat(issue_date))
     rows = []
     for lead in LEAD_DAYS:
-        day = d + timedelta(days=lead)
-        sel = weather[weather.index.normalize() == pd.Timestamp(day)]
-        if sel.empty:  # день за границей архива (например 1 марта у запуска 27.02)
-            continue
-        cols = {c: c.replace(f"__d{lead}", "") for c in sel.columns if c.endswith(f"__d{lead}")}
-        part = sel[list(cols)].rename(columns=cols)
-        part["lead_day"] = lead
-        rows.append(part)
+        part = _issued_day(weather, d + timedelta(days=lead), lead)
+        if part is not None:
+            rows.append(part)
     if not rows:
         raise ValueError(f"нет погодных данных для запуска {issue_date}")
     return pd.concat(rows)
