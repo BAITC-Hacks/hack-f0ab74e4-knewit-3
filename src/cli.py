@@ -29,8 +29,40 @@ def cmd_train(_args) -> None:
     print(json.dumps(reports, indent=2, ensure_ascii=False))
 
 
+TEMPLATE_MARK = "Режим без LLM"
+
+
+def _guard_downgrade(start: date, end: date, no_llm: bool, overwrite: bool) -> bool:
+    """Не дать шаблонному прогону молча затереть отчёты, написанные LLM.
+
+    Прогнозы — генерируемый результат с одним владельцем. Если двое запускают
+    rolling-период параллельно, слабый режим бесшумно обесценивает сильный, и
+    потеря видна только при чтении отчётов. Поэтому downgrade требует явного флага.
+    """
+    if not no_llm or overwrite:
+        return True
+    d, llm_reports = start, []
+    while d <= end:
+        path = FORECASTS / f"report_{d.isoformat()}.md"
+        if path.is_file() and TEMPLATE_MARK not in path.read_text():
+            llm_reports.append(d.isoformat())
+        d += timedelta(days=1)
+    if not llm_reports:
+        return True
+    print(f"ОСТАНОВЛЕНО: {len(llm_reports)} отчётов написаны LLM "
+          f"({llm_reports[0]} … {llm_reports[-1]}), а запуск идёт с --no-llm.\n"
+          f"Шаблонные отчёты затрут содержательные. Варианты:\n"
+          f"  • запустить без --no-llm (нужен ключ в .env), либо\n"
+          f"  • подтвердить затирание: добавить --overwrite\n"
+          f"Если параллельно считает кто-то ещё — сверьтесь, чей прогон канонический.")
+    return False
+
+
 def cmd_run_agent(args) -> None:
     from src.agent.loop import run_day_llm, run_day_no_llm
+    if not _guard_downgrade(date.fromisoformat(args.start), date.fromisoformat(args.end),
+                            args.no_llm, args.overwrite):
+        raise SystemExit(2)
     weather = _load_weather()
     d, end = date.fromisoformat(args.start), date.fromisoformat(args.end)
     runner = run_day_no_llm if args.no_llm else run_day_llm
@@ -106,6 +138,8 @@ def main() -> None:
     ra.add_argument("--start", required=True)
     ra.add_argument("--end", required=True)
     ra.add_argument("--no-llm", action="store_true")
+    ra.add_argument("--overwrite", action="store_true",
+                    help="разрешить шаблонному прогону затереть отчёты, написанные LLM")
     ra.set_defaults(func=cmd_run_agent)
     sub.add_parser("check-tz").set_defaults(func=cmd_check_tz)
     args = p.parse_args()
